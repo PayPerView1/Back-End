@@ -1,13 +1,15 @@
-import express from "express";
+const express = require('express');
+const cors = require('cors');
 
 const app = express();
 
-const PORT = 3000;
+// Middlewares أساسية
+app.use(cors());
+app.use(express.json()); // لقراءة البيانات القادمة بصيغة JSON
 
-app.get("/", (req, res) => {
-  res.send("Backend API is running");
+// مسار تجريبي (Health Check)
+app.get('/', (req, res) => {
+  res.send('Halal Clipping API is Running...');
 });
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+module.exports = app;
