@@ -2,23 +2,33 @@
   "name": "back-end",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
-  "scripts": {
-    "start": "node src/index.js"
+  "keywords": [],
+  "homepage": "https://github.com/PayPerView1/Back-End#readme",
+  "bugs": {
+    "url": "https://github.com/PayPerView1/Back-End/issues"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/PayPerView1/Back-End.git"
   },
-  "keywords": [],
-  "author": "",
   "license": "ISC",
-  "type": "module",
-  "bugs": {
-    "url": "https://github.com/PayPerView1/Back-End/issues"
+  "author": "",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon server.js"
   },
-  "homepage": "https://github.com/PayPerView1/Back-End#readme",
   "dependencies": {
-    "express": "^5.2.1"
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "mongodb": "^7.5.0",
+    "mongoose": "^9.9.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
   }
 }
