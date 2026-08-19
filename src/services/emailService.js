@@ -1,19 +1,21 @@
-// src/services/emailService.js
 const nodemailer = require('nodemailer');
 
 const sendEmail = async (options) => {
   const transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',
     port: 587,
-    secure: false, // استخدام STARTTLS بدلاً من SSL المباشر (الذي يسبب 465 ETIMEDOUT)
+    pool: true, // 👈 إعادة استخدام الاتصالات المفتوحة لسرعة فائقة
+    maxConnections: 5,
+    maxMessages: 100,
+    secure: false, // استخدام STARTTLS
     requireTLS: true,
-    family: 4, // إجبار الاتصال عبر IPv4 فقط لتجنب مهلة IPv6
+    family: 4, // إجبار الاتصال عبر IPv4
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
     },
     tls: {
-      rejectUnauthorized: false, // لتجاوز أي مشاكل في شهادات الحماية الخاصة بالشبكة المحلية
+      rejectUnauthorized: false,
     },
   });
 
@@ -37,18 +39,3 @@ const sendEmail = async (options) => {
 };
 
 module.exports = sendEmail;
-
-// // src/services/emailService.js
-// // يمكنك في البداية طباعة الرابط في الـ Console لاختبار التسجيل بسهولة
-// const sendEmail = async (options) => {
-//   console.log('----------------------------------------------------');
-//   console.log(`[EMAIL SIMULATOR] To: ${options.email}`);
-//   console.log(`[EMAIL SIMULATOR] Subject: ${options.subject}`);
-//   console.log(`[EMAIL SIMULATOR] Message: ${options.message}`);
-//   console.log('----------------------------------------------------');
-  
-//   // لاحقاً يمكنك استبدال هذا بـ Nodemailer أو SendGrid بسهولة
-//   return true;
-// };
-
-// module.exports = sendEmail;

@@ -47,14 +47,15 @@ exports.register = async (req, res) => {
       });
     }
 
-    // ➕ 4. معالجة مسار الصورة (ملف مرفوع عبر multer أو رابط URL)
+    // 4. معالجة مسار الصورة
     let finalProfilePicture = '';
     if (req.file) {
       finalProfilePicture = `/uploads/profile-pictures/${req.file.filename}`;
     } else if (profilePicture) {
       finalProfilePicture = profilePicture;
     }
-    // 4. Create user instance
+
+    // Create user instance
     const user = new User({
       fullName,
       email,
@@ -64,27 +65,31 @@ exports.register = async (req, res) => {
       country: country || '',
       city: city || '',
       profilePicture: finalProfilePicture || ''
-    }
-    );
+    });
 
     // Generate Verification Token
     const verificationToken = user.createEmailVerificationToken();
     await user.save();
 
-    // 5. Send Activation Link
+    // Prepare Activation Link
     const clientUrl = process.env.CLIENT_URL || `${req.protocol}://${req.get('host')}`;
     const activationUrl = `${clientUrl}/api/v1/auth/verify-email/${verificationToken}`;
 
-    await sendEmail({
-      email: user.email,
-      subject: 'Account Activation - Pay Per View',
-      message: `Welcome to our platform! Please activate your account by clicking the link below: ${activationUrl}`,
-    });
-
+    // ⚡ إرجاع الاستجابة للعميل فوراً
     res.status(201).json({
       success: true,
       message: 'Registration successful! Please check your email to activate your account.',
     });
+
+    // 🚀 إرسال الإيميل في الخلفية دون تعطيل الـ HTTP Response
+    sendEmail({
+      email: user.email,
+      subject: 'Account Activation - Pay Per View',
+      message: `Welcome to our platform! Please activate your account by clicking the link below: ${activationUrl}`,
+    }).catch((err) => {
+      console.error('[EMAIL ERROR]: Failed to send registration email:', err.message);
+    });
+
   } catch (error) {
     res.status(400).json({
       success: false,
@@ -172,9 +177,9 @@ exports.login = async (req, res) => {
         fullName: user.fullName,
         email: user.email,
         role: user.role,
-        phoneNumber: user.phoneNumber, // ➕ اختيارية
-        country: user.country,         // ➕ اختيارية
-        city: user.city,               // ➕ اختيارية
+        phoneNumber: user.phoneNumber,
+        country: user.country,
+        city: user.city,
         profilePicture: user.profilePicture
       },
     });
@@ -213,16 +218,21 @@ exports.forgotPassword = async (req, res) => {
     const clientUrl = process.env.CLIENT_URL || `${req.protocol}://${req.get('host')}`;
     const resetUrl = `${clientUrl}/api/v1/auth/reset-password/${resetToken}`;
 
-    await sendEmail({
-      email: user.email,
-      subject: 'Password Reset Request',
-      message: `You requested a password reset. Click this link to set a new password: ${resetUrl}`,
-    });
-
+    // ⚡ إرجاع الاستجابة للعميل فوراً
     res.status(200).json({
       success: true,
       message: 'Password reset link sent to your email.',
     });
+
+    // 🚀 إرسال الإيميل في الخلفية
+    sendEmail({
+      email: user.email,
+      subject: 'Password Reset Request',
+      message: `You requested a password reset. Click this link to set a new password: ${resetUrl}`,
+    }).catch((err) => {
+      console.error('[EMAIL ERROR]: Failed to send forgot password email:', err.message);
+    });
+
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -238,7 +248,6 @@ exports.resetPassword = async (req, res) => {
   try {
     const { password, confirmPassword } = req.body;
 
-    // 1. التأكد من إرسال الحقلين
     if (!password || !confirmPassword) {
       return res.status(400).json({
         success: false,
@@ -246,7 +255,6 @@ exports.resetPassword = async (req, res) => {
       });
     }
 
-    // 2. التحقق من تطابق كلمتي المرور
     if (password !== confirmPassword) {
       return res.status(400).json({
         success: false,
@@ -254,7 +262,6 @@ exports.resetPassword = async (req, res) => {
       });
     }
 
-    // 3. التحقق من مدى تعقيد كلمة المرور
     if (!PASSWORD_REGEX.test(password)) {
       return res.status(400).json({
         success: false,
