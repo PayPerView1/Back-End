@@ -1,16 +1,36 @@
 const crypto = require('crypto');
 const User = require('../models/user');
 const sendEmail = require('../services/emailService');
-const generateToken = require('../utils/generateTokens'); // 1. استدعاء دالة التوكن للربط مع دالة تسجيل الدخول
+const generateToken = require('../utils/generateTokens');
+
+// تعبير نمطي لمراقبة تعقيد كلمة المرور
+const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+const PASSWORD_ERROR_MSG = 'Password must contain at least 8 characters, one uppercase letter, one lowercase letter, one number, and one special character.';
 
 // @desc    Register a new user & Send activation email (US-AUTH-01 / R0.01, R0.03, R0.09)
 // @route   POST /api/v1/auth/register
 // @access  Public
 exports.register = async (req, res) => {
   try {
-    const { fullName, email, password, role } = req.body;
+    const { 
+      fullName, 
+      email, 
+      password, 
+      role, 
+      phoneNumber, 
+      country, 
+      city, 
+      profilePicture } = req.body;
 
-    // 1. Check if email exists
+    // 1. Check password complexity
+    if (!password || !PASSWORD_REGEX.test(password)) {
+      return res.status(400).json({
+        success: false,
+        message: PASSWORD_ERROR_MSG,
+      });
+    }
+
+    // 2. Check if email exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({
@@ -19,7 +39,7 @@ exports.register = async (req, res) => {
       });
     }
 
-    // 2. Validate role selection
+    // 3. Validate role selection
     if (role && !['BRAND', 'CLIPPER'].includes(role)) {
       return res.status(400).json({
         success: false,
@@ -27,26 +47,38 @@ exports.register = async (req, res) => {
       });
     }
 
-    // 3. Create user instance
+    // ➕ 4. معالجة مسار الصورة (ملف مرفوع عبر multer أو رابط URL)
+    let finalProfilePicture = '';
+    if (req.file) {
+      finalProfilePicture = `/uploads/profile-pictures/${req.file.filename}`;
+    } else if (profilePicture) {
+      finalProfilePicture = profilePicture;
+    }
+    // 4. Create user instance
     const user = new User({
       fullName,
       email,
       password,
       role: role || 'CLIPPER',
-    });
+      phoneNumber: phoneNumber || '',
+      country: country || '',
+      city: city || '',
+      profilePicture: finalProfilePicture || ''
+    }
+    );
 
     // Generate Verification Token
     const verificationToken = user.createEmailVerificationToken();
     await user.save();
 
-    // 4. Send Activation Link
+    // 5. Send Activation Link
     const clientUrl = process.env.CLIENT_URL || `${req.protocol}://${req.get('host')}`;
     const activationUrl = `${clientUrl}/api/v1/auth/verify-email/${verificationToken}`;
-    
+
     await sendEmail({
       email: user.email,
       subject: 'Account Activation - Pay Per View',
-      message: `Welcome to our platform! Please activate your account by clicking the link then click visit site: ${activationUrl}`,
+      message: `Welcome to our platform! Please activate your account by clicking the link below: ${activationUrl}`,
     });
 
     res.status(201).json({
@@ -140,6 +172,10 @@ exports.login = async (req, res) => {
         fullName: user.fullName,
         email: user.email,
         role: user.role,
+        phoneNumber: user.phoneNumber, // ➕ اختيارية
+        country: user.country,         // ➕ اختيارية
+        city: user.city,               // ➕ اختيارية
+        profilePicture: user.profilePicture
       },
     });
   } catch (error) {
@@ -176,7 +212,7 @@ exports.forgotPassword = async (req, res) => {
 
     const clientUrl = process.env.CLIENT_URL || `${req.protocol}://${req.get('host')}`;
     const resetUrl = `${clientUrl}/api/v1/auth/reset-password/${resetToken}`;
-    
+
     await sendEmail({
       email: user.email,
       subject: 'Password Reset Request',
@@ -200,7 +236,31 @@ exports.forgotPassword = async (req, res) => {
 // @access  Public
 exports.resetPassword = async (req, res) => {
   try {
-    const { password } = req.body;
+    const { password, confirmPassword } = req.body;
+
+    // 1. التأكد من إرسال الحقلين
+    if (!password || !confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide both password and confirmPassword fields.',
+      });
+    }
+
+    // 2. التحقق من تطابق كلمتي المرور
+    if (password !== confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password and confirm password do not match.',
+      });
+    }
+
+    // 3. التحقق من مدى تعقيد كلمة المرور
+    if (!PASSWORD_REGEX.test(password)) {
+      return res.status(400).json({
+        success: false,
+        message: PASSWORD_ERROR_MSG,
+      });
+    }
 
     const hashedToken = crypto
       .createHash('sha256')
@@ -247,6 +307,13 @@ exports.changePassword = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Please provide both current and new password.',
+      });
+    }
+
+    if (!PASSWORD_REGEX.test(newPassword)) {
+      return res.status(400).json({
+        success: false,
+        message: PASSWORD_ERROR_MSG,
       });
     }
 

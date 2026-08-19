@@ -22,13 +22,17 @@ exports.protect = async (req, res, next) => {
   }
 
   try {
-    // 2. فك تشفير التوكن والتحقق من صحته
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET || 'fallback_secret_key'
-    );
+    if (!process.env.JWT_SECRET) {
+      return res.status(500).json({
+        success: false,
+        message: 'Server configuration error: JWT_SECRET is missing.',
+      });
+    }
 
-    // 3. التاكد من أن المستخدم صاحب التوكن لا يزال موجوداً في قواعد البيانات
+    // 2. فك تشفير التوكن والتحقق من صحته
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    // 3. التأكد من أن المستخدم صاحب التوكن لا يزال موجوداً في قاعدة البيانات
     req.user = await User.findById(decoded.id);
 
     if (!req.user) {

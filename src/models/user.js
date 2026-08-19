@@ -2,6 +2,15 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 
+const INTEREST_OPTIONS = [
+  'LIFESTYLE',    // نمط الحياة
+  'TECHNOLOGY',   // التكنولوجيا
+  'EDUCATION',    // التعليم
+  'ENTERTAINMENT',// الترفيه
+  'FINANCE',      // المالية
+  'HEALTH',       // الصحة
+];
+
 const userSchema = new mongoose.Schema(
   {
     fullName: {
@@ -18,9 +27,18 @@ const userSchema = new mongoose.Schema(
     },
     password: {
       type: String,
-      required: [true, 'Please provide a password'],
+      required: [
+        function () {
+          return !this.googleId;
+        },
+        'Please provide a password',
+      ],
       minlength: [8, 'Password must be at least 8 characters long'],
       select: false, // يمنع إرجاع الباسورد في الاستعلامات العادية
+    },
+    googleId: {
+      type: String,
+      default: null,
     },
     role: {
       type: String,
@@ -32,37 +50,57 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    
+    interests: {
+      type: [String],       // مصفوفة نصوص
+      enum: INTEREST_OPTIONS, // كل عنصر بالمصفوفة لازم يكون من هالقيم بس
+      default: [],           // افتراضيًا فاضية - المستخدم مش مجبر يختار شي
+    },
+
     emailVerificationToken: String,
     emailVerificationExpires: Date,
     passwordResetToken: String,
     passwordResetExpires: Date,
+    
+    // الحقول الاختيارية المعرفة للتسجيل والبروفايل
+    phoneNumber: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    country: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    city: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    profilePicture: {
+      type: String,
+      default: '',
+    }
   },
   { timestamps: true }
 );
 
-// 1. تشفير كلمة المرور قبل الحفظ أوتوماتيكياً
+// تشفير كلمة المرور قبل الحفظ إذا تم تعديلها أو إضافتها
 userSchema.pre('save', async function () {
-  if (!this.isModified('password')) return; // تم تعديل السطر: إزالة next()
-  
-  // Complexity policy check: حرف كبير، حرف صغير، رقم، ورمز خاص
-  const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-  if (!passwordRegex.test(this.password)) {
-    throw new Error(
-      'Password must contain at least 8 characters, one uppercase letter, one lowercase letter, one number, and one special character.'
-    );
-  }
+  if (!this.isModified('password') || !this.password) return;
 
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
-  // تم تعديل السطر: إزالة next() في النهاية
 });
 
-// 2. دالة مقارنة كلمة المرور عند تسجيل الدخول
+// دالة مقارنة كلمة المرور عند تسجيل الدخول
 userSchema.methods.matchPassword = async function (enteredPassword) {
+  if (!this.password) return false;
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
-// 3. دالة إنشاء رمز تفعيل الإيميل (مشفّر وله تاريخ انتهاء)
+// دالة إنشاء رمز تفعيل الإيميل
 userSchema.methods.createEmailVerificationToken = function () {
   const verificationToken = crypto.randomBytes(32).toString('hex');
 
@@ -74,7 +112,7 @@ userSchema.methods.createEmailVerificationToken = function () {
   // تنتهي صلاحيته بعد 24 ساعة
   this.emailVerificationExpires = Date.now() + 24 * 60 * 60 * 1000;
 
-  return verificationToken; // نرجع الرمز غير المشفّر لإرساله عبر الإيميل
+  return verificationToken;
 };
 
 module.exports = mongoose.model('User', userSchema);

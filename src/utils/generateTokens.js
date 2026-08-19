@@ -1,10 +1,14 @@
-// src/utils/generateToken.js
+// src/utils/generateTokens.js
 const jwt = require('jsonwebtoken');
 
 const generateToken = (userId, role) => {
+  if (!process.env.JWT_SECRET) {
+    throw new Error('FATAL ERROR: JWT_SECRET is not defined in environment variables.');
+  }
+
   return jwt.sign(
     { id: userId, role: role },
-    process.env.JWT_SECRET || 'fallback_secret_key',
+    process.env.JWT_SECRET,
     { expiresIn: '30d' } // صلاحية التوكن 30 يوماً
   );
 };

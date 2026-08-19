@@ -1,4 +1,11 @@
 require('dotenv').config();
+
+// فحص متغيرات البيئة الأساسية قبل التشغيل
+if (!process.env.JWT_SECRET) {
+  console.error('FATAL ERROR: JWT_SECRET is not defined in .env file.');
+  process.exit(1);
+}
+
 const app = require('./src/app');
 const connectDB = require('./src/config/db.js');
 
