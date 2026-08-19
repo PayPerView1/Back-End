@@ -20,9 +20,9 @@ exports.register = async (req, res) => {
       phoneNumber, 
       country, 
       city, 
-      profilePicture } = req.body;
+      profilePicture 
+    } = req.body;
 
-    // 1. Check password complexity
     if (!password || !PASSWORD_REGEX.test(password)) {
       return res.status(400).json({
         success: false,
@@ -30,7 +30,6 @@ exports.register = async (req, res) => {
       });
     }
 
-    // 2. Check if email exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({
@@ -39,7 +38,6 @@ exports.register = async (req, res) => {
       });
     }
 
-    // 3. Validate role selection
     if (role && !['BRAND', 'CLIPPER'].includes(role)) {
       return res.status(400).json({
         success: false,
@@ -47,7 +45,6 @@ exports.register = async (req, res) => {
       });
     }
 
-    // 4. معالجة مسار الصورة
     let finalProfilePicture = '';
     if (req.file) {
       finalProfilePicture = `/uploads/profile-pictures/${req.file.filename}`;
@@ -55,7 +52,6 @@ exports.register = async (req, res) => {
       finalProfilePicture = profilePicture;
     }
 
-    // Create user instance
     const user = new User({
       fullName,
       email,
@@ -67,28 +63,36 @@ exports.register = async (req, res) => {
       profilePicture: finalProfilePicture || ''
     });
 
-    // Generate Verification Token
     const verificationToken = user.createEmailVerificationToken();
     await user.save();
 
-    // Prepare Activation Link
     const clientUrl = process.env.CLIENT_URL || `${req.protocol}://${req.get('host')}`;
     const activationUrl = `${clientUrl}/api/v1/auth/verify-email/${verificationToken}`;
 
-    // ⚡ إرجاع الاستجابة للعميل فوراً
-    res.status(201).json({
-      success: true,
-      message: 'Registration successful! Please check your email to activate your account.',
-    });
+    // ✅ الانتظار حتى يتم إرسال الإيميل بنجاح قبل إرجاع الـ Response
+    try {
+      await sendEmail({
+        email: user.email,
+        subject: 'Account Activation - Pay Per View',
+        message: `Welcome to our platform! Please activate your account by clicking the link below: ${activationUrl}`,
+      });
 
-    // 🚀 إرسال الإيميل في الخلفية دون تعطيل الـ HTTP Response
-    sendEmail({
-      email: user.email,
-      subject: 'Account Activation - Pay Per View',
-      message: `Welcome to our platform! Please activate your account by clicking the link below: ${activationUrl}`,
-    }).catch((err) => {
-      console.error('[EMAIL ERROR]: Failed to send registration email:', err.message);
-    });
+      return res.status(201).json({
+        success: true,
+        message: 'Registration successful! Please check your email to activate your account.',
+      });
+    } catch (emailError) {
+      // إزالة التوكين وحفظ المستخدم أو حذف الحساب إذا فشل الإرسال
+      user.emailVerificationToken = undefined;
+      user.emailVerificationExpires = undefined;
+      await user.save({ validateBeforeSave: false });
+
+      console.error('[EMAIL ERROR]:', emailError.message);
+      return res.status(500).json({
+        success: false,
+        message: 'User registered, but verification email could not be sent. Please request a new one.',
+      });
+    }
 
   } catch (error) {
     res.status(400).json({
@@ -218,20 +222,29 @@ exports.forgotPassword = async (req, res) => {
     const clientUrl = process.env.CLIENT_URL || `${req.protocol}://${req.get('host')}`;
     const resetUrl = `${clientUrl}/api/v1/auth/reset-password/${resetToken}`;
 
-    // ⚡ إرجاع الاستجابة للعميل فوراً
-    res.status(200).json({
-      success: true,
-      message: 'Password reset link sent to your email.',
-    });
+    // ✅ الانتظار باستخدام await مع الإيميل ومعالجة الفشل
+    try {
+      await sendEmail({
+        email: user.email,
+        subject: 'Password Reset Request',
+        message: `You requested a password reset. Click this link to set a new password: ${resetUrl}`,
+      });
 
-    // 🚀 إرسال الإيميل في الخلفية
-    sendEmail({
-      email: user.email,
-      subject: 'Password Reset Request',
-      message: `You requested a password reset. Click this link to set a new password: ${resetUrl}`,
-    }).catch((err) => {
-      console.error('[EMAIL ERROR]: Failed to send forgot password email:', err.message);
-    });
+      return res.status(200).json({
+        success: true,
+        message: 'Password reset link sent to your email.',
+      });
+    } catch (emailError) {
+      user.passwordResetToken = undefined;
+      user.passwordResetExpires = undefined;
+      await user.save({ validateBeforeSave: false });
+
+      console.error('[EMAIL ERROR]:', emailError.message);
+      return res.status(500).json({
+        success: false,
+        message: 'There was an error sending the email. Try again later.',
+      });
+    }
 
   } catch (error) {
     res.status(500).json({
