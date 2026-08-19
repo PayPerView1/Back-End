@@ -45,12 +45,12 @@ beforeEach(async () => {
 });
 
 // ============================================
-// اختبارات GET /api/profile
+// اختبارات GET /api/v1/profile
 // ============================================
-describe('GET /api/profile', () => {
+describe('GET /api/v1/profile', () => {
   it('لازم يرجع بيانات المستخدم لو التوكن صحيح', async () => {
     const res = await request(app)
-      .get('/api/profile')
+      .get('/api/v1/profile')
       .set('Authorization', `Bearer ${token}`);
 
     expect(res.statusCode).toBe(200);
@@ -60,14 +60,14 @@ describe('GET /api/profile', () => {
   });
 
   it('لازم يرجع 401 لو مافي توكن إطلاقًا', async () => {
-    const res = await request(app).get('/api/profile');
+    const res = await request(app).get('/api/v1/profile');
 
     expect(res.statusCode).toBe(401);
   });
 
   it('لازم يرجع 401 لو التوكن غلط', async () => {
     const res = await request(app)
-      .get('/api/profile')
+      .get('/api/v1/profile')
       .set('Authorization', 'Bearer invalid.token.here');
 
     expect(res.statusCode).toBe(401);
@@ -75,12 +75,12 @@ describe('GET /api/profile', () => {
 });
 
 // ============================================
-// اختبارات PUT /api/profile - تحديث ناجح
+// اختبارات PUT /api/v1/profile - تحديث ناجح
 // ============================================
-describe('PUT /api/profile - تحديث صحيح', () => {
+describe('PUT /api/v1/profile - تحديث صحيح', () => {
   it('لازم يعدل الاسم بنجاح', async () => {
     const res = await request(app)
-      .put('/api/profile')
+      .put('/api/v1/profile')
       .set('Authorization', `Bearer ${token}`)
       .send({ fullName: 'Ahmad Khalil' });
 
@@ -90,7 +90,7 @@ describe('PUT /api/profile - تحديث صحيح', () => {
 
   it('لازم يعدل رقم الهاتف والدولة مع بعض بنجاح', async () => {
     const res = await request(app)
-      .put('/api/profile')
+      .put('/api/v1/profile')
       .set('Authorization', `Bearer ${token}`)
       .send({ country: 'JO', phoneNumber: '791234567' });
 
@@ -101,7 +101,7 @@ describe('PUT /api/profile - تحديث صحيح', () => {
 
   it('لازم يقبل اسم فيه شرطة أو نقطة أو فاصلة عليا', async () => {
     const res = await request(app)
-      .put('/api/profile')
+      .put('/api/v1/profile')
       .set('Authorization', `Bearer ${token}`)
       .send({ fullName: "Jean-Paul O'Brien" });
 
@@ -111,12 +111,12 @@ describe('PUT /api/profile - تحديث صحيح', () => {
 });
 
 // ============================================
-// اختبارات PUT /api/profile - حالات الخطأ (Validation)
+// اختبارات PUT /api/v1/profile - حالات الخطأ (Validation)
 // ============================================
-describe('PUT /api/profile - حالات الخطأ', () => {
+describe('PUT /api/v1/profile - حالات الخطأ', () => {
   it('لازم يرفض اسم فيه أرقام', async () => {
     const res = await request(app)
-      .put('/api/profile')
+      .put('/api/v1/profile')
       .set('Authorization', `Bearer ${token}`)
       .send({ fullName: 'Ahmad123' });
 
@@ -127,7 +127,7 @@ describe('PUT /api/profile - حالات الخطأ', () => {
 
   it('لازم يرفض دولة مش موجودة بالقائمة', async () => {
     const res = await request(app)
-      .put('/api/profile')
+      .put('/api/v1/profile')
       .set('Authorization', `Bearer ${token}`)
       .send({ country: 'XX' });
 
@@ -137,7 +137,7 @@ describe('PUT /api/profile - حالات الخطأ', () => {
 
   it('لازم يرفض رقم هاتف غلط لدولة محددة', async () => {
     const res = await request(app)
-      .put('/api/profile')
+      .put('/api/v1/profile')
       .set('Authorization', `Bearer ${token}`)
       .send({ country: 'PS', phoneNumber: '123' });
 
@@ -147,7 +147,7 @@ describe('PUT /api/profile - حالات الخطأ', () => {
 
   it('لازم يرفض رقم هاتف بدون تحديد دولة بنفس الطلب', async () => {
     const res = await request(app)
-      .put('/api/profile')
+      .put('/api/v1/profile')
       .set('Authorization', `Bearer ${token}`)
       .send({ phoneNumber: '599123456' });
 
@@ -157,7 +157,7 @@ describe('PUT /api/profile - حالات الخطأ', () => {
 
   it('لازم يرفض رابط صورة غير صحيح', async () => {
     const res = await request(app)
-      .put('/api/profile')
+      .put('/api/v1/profile')
       .set('Authorization', `Bearer ${token}`)
       .send({ profilePicture: 'not-a-valid-url' });
 
@@ -167,7 +167,7 @@ describe('PUT /api/profile - حالات الخطأ', () => {
 
   it('لازم يرفض التعديل بدون توكن', async () => {
     const res = await request(app)
-      .put('/api/profile')
+      .put('/api/v1/profile')
       .send({ fullName: 'Ahmad' });
 
     expect(res.statusCode).toBe(401);
@@ -175,12 +175,12 @@ describe('PUT /api/profile - حالات الخطأ', () => {
 });
 
 // ============================================
-// اختبارات PUT /api/profile - رفع صورة (Image Upload)
+// اختبارات PUT /api/v1/profile - رفع صورة (Image Upload)
 // ============================================
-describe('PUT /api/profile - رفع صورة', () => {
+describe('PUT /api/v1/profile - رفع صورة', () => {
   it('لازم يرفض ملف مش صورة (نوع غير مسموح)', async () => {
     const res = await request(app)
-      .put('/api/profile')
+      .put('/api/v1/profile')
       .set('Authorization', `Bearer ${token}`)
       .attach('profilePicture', Buffer.from('fake text content'), {
         filename: 'test.txt',
@@ -198,7 +198,7 @@ describe('PUT /api/profile - رفع صورة', () => {
     );
 
     const res = await request(app)
-      .put('/api/profile')
+      .put('/api/v1/profile')
       .set('Authorization', `Bearer ${token}`)
       .attach('profilePicture', fakePngBuffer, {
         filename: 'test.png',
@@ -207,5 +207,97 @@ describe('PUT /api/profile - رفع صورة', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body.user.profilePicture).toMatch(/^\/uploads\/profile-pictures\//);
+  });
+});
+
+// ============================================
+// اختبارات PUT /api/v1/profile - الاهتمامات (Interests)
+// ============================================
+describe('PUT /api/v1/profile - الاهتمامات', () => {
+  it('لازم يقبل مصفوفة فاضية (المستخدم بده يشيل كل اهتماماته)', async () => {
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ interests: [] });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.user.interests).toEqual([]);
+  });
+
+  it('لازم يقبل اهتمام وحد', async () => {
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ interests: ['TECHNOLOGY'] });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.user.interests).toEqual(['TECHNOLOGY']);
+  });
+
+  it('لازم يقبل أكتر من اهتمام مع بعض', async () => {
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ interests: ['TECHNOLOGY', 'HEALTH', 'FINANCE'] });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.user.interests).toEqual(['TECHNOLOGY', 'HEALTH', 'FINANCE']);
+  });
+
+  it('لازم يقبل كل الاهتمامات الستة مع بعض', async () => {
+    const allInterests = [
+      'LIFESTYLE',
+      'TECHNOLOGY',
+      'EDUCATION',
+      'ENTERTAINMENT',
+      'FINANCE',
+      'HEALTH',
+    ];
+
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ interests: allInterests });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.user.interests).toEqual(allInterests);
+  });
+
+  it('لازم يرفض قيمة اهتمام مش موجودة بالقائمة المسموحة', async () => {
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ interests: ['SPORTS'] }); // مش من القيم الستة المسموحة
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.errors.some((e) => e.field === 'interests')).toBe(true);
+  });
+
+  it('لازم يرفض لو interests مش مصفوفة أصلاً', async () => {
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ interests: 'TECHNOLOGY' }); // نص بدل مصفوفة
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.errors.some((e) => e.field === 'interests')).toBe(true);
+  });
+
+  it('لازم يستبدل المصفوفة بالكامل، مش يضيف عليها', async () => {
+    // أول تحديث - نحط اهتمامين
+    await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ interests: ['TECHNOLOGY', 'HEALTH'] });
+
+    // ثاني تحديث - نبعت اهتمام وحد بس
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ interests: ['FINANCE'] });
+
+    expect(res.statusCode).toBe(200);
+    // لازم يكون بس FINANCE، مش تراكم مع القديم
+    expect(res.body.user.interests).toEqual(['FINANCE']);
   });
 });

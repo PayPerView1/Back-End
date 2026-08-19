@@ -11,6 +11,15 @@ countries.registerLocale(enLocale);
 // Object.keys بتاخد بس الأكواد (AF, AL, ...) وتجاهل الأسماء
 const VALID_COUNTRIES = Object.keys(countries.getNames('en'));
 
+const VALID_INTERESTS = [
+  'LIFESTYLE',
+  'TECHNOLOGY',
+  'EDUCATION',
+  'ENTERTAINMENT',
+  'FINANCE',
+  'HEALTH',
+];
+
 // قواعد التحقق لتحديث البروفايل
 const updateProfileRules = [
   body('fullName')
@@ -70,6 +79,22 @@ const updateProfileRules = [
     .trim()
     .isURL()
     .withMessage('Profile picture must be a valid URL'),
+
+  body('interests')
+    .optional()
+    .isArray()
+    .withMessage('Interests must be an array')
+    .custom((value) => {
+      // كل عنصر بالمصفوفة لازم يكون من القيم المسموحة
+      const invalidValues = value.filter((v) => !VALID_INTERESTS.includes(v));
+ 
+      if (invalidValues.length > 0) {
+        throw new Error(`Invalid interests: ${invalidValues.join(', ')}`);
+      }
+ 
+      return true;
+    }),
+    
 ];
 
 // Middleware بيفحص نتيجة التحقق ويرجع الأخطاء لو في

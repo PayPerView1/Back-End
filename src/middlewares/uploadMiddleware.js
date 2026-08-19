@@ -17,12 +17,14 @@ const storage = multer.diskStorage({
     cb(null, UPLOAD_DIR);
   },
   filename: (req, file, cb) => {
-    // اسم فريد: userId + وقت الرفع + الامتداد الأصلي
-    // مثال: 650f1a2b3c-1719999999999.jpg
-    const uniqueSuffix = `${req.user._id}-${Date.now()}`;
+   
+    const identifier = req.user?._id || 'new-user';
+
+    const uniqueSuffix = `${identifier}-${Date.now()}`;
     const ext = path.extname(file.originalname); // .jpg, .png...
+
     cb(null, `${uniqueSuffix}${ext}`);
-  },
+  }
 });
 
 // فلترة نوع الملف - نسمح بالصور بس

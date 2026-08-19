@@ -1,6 +1,15 @@
 // src/models/User.js
 const mongoose = require('mongoose');
 
+const INTEREST_OPTIONS = [
+  'LIFESTYLE',    // نمط الحياة
+  'TECHNOLOGY',   // التكنولوجيا
+  'EDUCATION',    // التعليم
+  'ENTERTAINMENT',// الترفيه
+  'FINANCE',      // المالية
+  'HEALTH',       // الصحة
+];
+
 const userSchema = new mongoose.Schema(
   {
     // R0.04 & R0.01: المعلومات الأساسية
@@ -49,6 +58,13 @@ const userSchema = new mongoose.Schema(
       default: '',
     },
 
+    // الاهتمامات - المستخدم فيه يختار وحدة، أكتر من وحدة، كلهم، أو ولا وحدة
+    interests: {
+      type: [String],       // مصفوفة نصوص
+      enum: INTEREST_OPTIONS, // كل عنصر بالمصفوفة لازم يكون من هالقيم بس
+      default: [],           // افتراضيًا فاضية - المستخدم مش مجبر يختار شي
+    },
+
     // R0.09: تفعيل الإيميل
     isVerified: {
       type: Boolean,
@@ -67,3 +83,4 @@ const userSchema = new mongoose.Schema(
 );
 
 module.exports = mongoose.model('User', userSchema);
+module.exports.INTEREST_OPTIONS = INTEREST_OPTIONS;

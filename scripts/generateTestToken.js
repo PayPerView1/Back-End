@@ -6,8 +6,8 @@
 
 require('dotenv').config();
 const mongoose = require('mongoose');
-const User = require('./src/models/user'); // عدّل المسار حسب مكان الملف عندك
-const generateToken = require('./src/utils/generateTokens'); // عدّل المسار حسب مكان الملف عندك
+const User = require('../src/models/user'); // عدّل المسار حسب مكان الملف عندك
+const generateToken = require('../src/utils/generateTokens'); // عدّل المسار حسب مكان الملف عندك
 
 const run = async () => {
   try {

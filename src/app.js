@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const connectDB = require('./config/db');
-const authRoutes = require('./routes/authRoutes');
+//const authRoutes = require('./routes/authRoutes');
 const profileRoutes = require('./routes/profileRoutes');
 
 
@@ -22,7 +22,7 @@ app.get('/', (req, res) => {
 });
 
 // ربط المسارات
-app.use('/api/auth', authRoutes);
-app.use('/api/profile', profileRoutes);
+//app.use('/api/auth', authRoutes);
+app.use('/api/v1/profile', profileRoutes);
 
 module.exports = app;

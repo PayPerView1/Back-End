@@ -37,13 +37,16 @@ const updateProfile = async (req, res) => {
 
     // بنحدد بس الحقول المسموح للمستخدم يعدلها
     // (متعمّدين ما نسمح بتعديل email أو role أو password من هون)
-    const { fullName, phoneNumber, country, city, profilePicture } = req.body;
+    const { fullName, phoneNumber, country, city, profilePicture, interests } = req.body;
 
     if (fullName !== undefined) user.fullName = fullName;
     if (phoneNumber !== undefined) user.phoneNumber = phoneNumber;
     if (country !== undefined) user.country = country;
     if (city !== undefined) user.city = city;
-    // if (profilePicture !== undefined) user.profilePicture = profilePicture;
+
+    // الاهتمامات: بتستبدل المصفوفة بالكامل بكل مرة (مش تراكمية)
+    // يعني لو المستخدم بده يشيل اهتمام، الفرونت إند يبعت المصفوفة الجديدة بدونه
+    if (interests !== undefined) user.interests = interests;
 
 
     // الصورة: إما ملف مرفوع فعليًا (req.file من multer) أو رابط نصي (profilePicture بالـ body)
@@ -71,6 +74,7 @@ const updateProfile = async (req, res) => {
         phoneNumber: updatedUser.phoneNumber,
         country: updatedUser.country,
         city: updatedUser.city,
+        interests: updatedUser.interests,
       },
     });
   } catch (error) {
