@@ -1,0 +1,303 @@
+// tests/profile.test.js
+const request = require('supertest');
+const mongoose = require('mongoose');
+const { MongoMemoryServer } = require('mongodb-memory-server');
+
+const app = require('../app'); // عدّل المسار حسب مكان app.js عندك
+const User = require('../models/user'); // عدّل المسار حسب مكان الموديل عندك
+const generateToken = require('../utils/generateTokens'); // عدّل المسار حسب مكان الملف عندك
+
+let mongoServer;
+let testUser;
+let token;
+
+// بتشتغل مرة وحدة قبل كل الاختبارات
+beforeAll(async () => {
+  // بننشئ قاعدة بيانات وهمية بالذاكرة (منعزلة كليًا عن Atlas الحقيقية)
+  mongoServer = await MongoMemoryServer.create();
+  const uri = mongoServer.getUri();
+  await mongoose.connect(uri);
+});
+
+// بتشتغل مرة وحدة بعد ما كل الاختبارات تخلص
+afterAll(async () => {
+  await mongoose.disconnect();
+  await mongoServer.stop();
+});
+
+// بتشتغل قبل كل اختبار (test) لحاله - عشان كل اختبار يبلش ببيانات نظيفة
+beforeEach(async () => {
+  await User.deleteMany({}); // بنفضي قاعدة البيانات الوهمية
+
+  // بننشئ مستخدم تجريبي مباشرة (بدون ما نمر على authController تبع زميلك)
+  testUser = await User.create({
+    fullName: 'Test User',
+    email: 'testuser@example.com',
+    password: 'hashedPassword123', // هون افتراضي، مش لازم يكون hash حقيقي لأنو ما رح نسجل دخول فعليًا
+    role: 'CLIPPER',
+    country: 'PS',
+    phoneNumber: '',
+    city: '',
+  });
+
+  // بنولد توكن صحيح يدويًا، بنفس الآلية يلي authController رح يستخدمها
+  token = generateToken(testUser._id, testUser.role);
+});
+
+// ============================================
+// اختبارات GET /api/v1/profile
+// ============================================
+describe('GET /api/v1/profile', () => {
+  it('لازم يرجع بيانات المستخدم لو التوكن صحيح', async () => {
+    const res = await request(app)
+      .get('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.user.email).toBe('testuser@example.com');
+    expect(res.body.user.password).toBeUndefined(); // تأكيد إنو الباسورد ما بيترجع
+  });
+
+  it('لازم يرجع 401 لو مافي توكن إطلاقًا', async () => {
+    const res = await request(app).get('/api/v1/profile');
+
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('لازم يرجع 401 لو التوكن غلط', async () => {
+    const res = await request(app)
+      .get('/api/v1/profile')
+      .set('Authorization', 'Bearer invalid.token.here');
+
+    expect(res.statusCode).toBe(401);
+  });
+});
+
+// ============================================
+// اختبارات PUT /api/v1/profile - تحديث ناجح
+// ============================================
+describe('PUT /api/v1/profile - تحديث صحيح', () => {
+  it('لازم يعدل الاسم بنجاح', async () => {
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ fullName: 'Ahmad Khalil' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.user.fullName).toBe('Ahmad Khalil');
+  });
+
+  it('لازم يعدل رقم الهاتف والدولة مع بعض بنجاح', async () => {
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ country: 'JO', phoneNumber: '791234567' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.user.country).toBe('JO');
+    expect(res.body.user.phoneNumber).toBe('791234567');
+  });
+
+  it('لازم يقبل اسم فيه شرطة أو نقطة أو فاصلة عليا', async () => {
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ fullName: "Jean-Paul O'Brien" });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.user.fullName).toBe("Jean-Paul O'Brien");
+  });
+});
+
+// ============================================
+// اختبارات PUT /api/v1/profile - حالات الخطأ (Validation)
+// ============================================
+describe('PUT /api/v1/profile - حالات الخطأ', () => {
+  it('لازم يرفض اسم فيه أرقام', async () => {
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ fullName: 'Ahmad123' });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(res.body.errors.some((e) => e.field === 'fullName')).toBe(true);
+  });
+
+  it('لازم يرفض دولة مش موجودة بالقائمة', async () => {
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ country: 'XX' });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.errors.some((e) => e.field === 'country')).toBe(true);
+  });
+
+  it('لازم يرفض رقم هاتف غلط لدولة محددة', async () => {
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ country: 'PS', phoneNumber: '123' });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.errors.some((e) => e.field === 'phoneNumber')).toBe(true);
+  });
+
+  it('لازم يرفض رقم هاتف بدون تحديد دولة بنفس الطلب', async () => {
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ phoneNumber: '599123456' });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.errors.some((e) => e.field === 'phoneNumber')).toBe(true);
+  });
+
+  it('لازم يرفض رابط صورة غير صحيح', async () => {
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ profilePicture: 'not-a-valid-url' });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.errors.some((e) => e.field === 'profilePicture')).toBe(true);
+  });
+
+  it('لازم يرفض التعديل بدون توكن', async () => {
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .send({ fullName: 'Ahmad' });
+
+    expect(res.statusCode).toBe(401);
+  });
+});
+
+// ============================================
+// اختبارات PUT /api/v1/profile - رفع صورة (Image Upload)
+// ============================================
+describe('PUT /api/v1/profile - رفع صورة', () => {
+  it('لازم يرفض ملف مش صورة (نوع غير مسموح)', async () => {
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .attach('profilePicture', Buffer.from('fake text content'), {
+        filename: 'test.txt',
+        contentType: 'text/plain',
+      });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('لازم يقبل صورة بصيغة مسموحة ويحفظ مسارها', async () => {
+    // بنبني صورة PNG وهمية بسيطة بالذاكرة (1x1 بكسل شفاف) عشان ما نعتمد على ملف خارجي
+    const fakePngBuffer = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+      'base64'
+    );
+
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .attach('profilePicture', fakePngBuffer, {
+        filename: 'test.png',
+        contentType: 'image/png',
+      });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.user.profilePicture).toMatch(/^\/uploads\/profile-pictures\//);
+  });
+});
+
+// ============================================
+// اختبارات PUT /api/v1/profile - الاهتمامات (Interests)
+// ============================================
+describe('PUT /api/v1/profile - الاهتمامات', () => {
+  it('لازم يقبل مصفوفة فاضية (المستخدم بده يشيل كل اهتماماته)', async () => {
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ interests: [] });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.user.interests).toEqual([]);
+  });
+
+  it('لازم يقبل اهتمام وحد', async () => {
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ interests: ['TECHNOLOGY'] });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.user.interests).toEqual(['TECHNOLOGY']);
+  });
+
+  it('لازم يقبل أكتر من اهتمام مع بعض', async () => {
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ interests: ['TECHNOLOGY', 'HEALTH', 'FINANCE'] });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.user.interests).toEqual(['TECHNOLOGY', 'HEALTH', 'FINANCE']);
+  });
+
+  it('لازم يقبل كل الاهتمامات الستة مع بعض', async () => {
+    const allInterests = [
+      'LIFESTYLE',
+      'TECHNOLOGY',
+      'EDUCATION',
+      'ENTERTAINMENT',
+      'FINANCE',
+      'HEALTH',
+    ];
+
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ interests: allInterests });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.user.interests).toEqual(allInterests);
+  });
+
+  it('لازم يرفض قيمة اهتمام مش موجودة بالقائمة المسموحة', async () => {
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ interests: ['SPORTS'] }); // مش من القيم الستة المسموحة
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.errors.some((e) => e.field === 'interests')).toBe(true);
+  });
+
+  it('لازم يرفض لو interests مش مصفوفة أصلاً', async () => {
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ interests: 'TECHNOLOGY' }); // نص بدل مصفوفة
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.errors.some((e) => e.field === 'interests')).toBe(true);
+  });
+
+  it('لازم يستبدل المصفوفة بالكامل، مش يضيف عليها', async () => {
+    // أول تحديث - نحط اهتمامين
+    await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ interests: ['TECHNOLOGY', 'HEALTH'] });
+
+    // ثاني تحديث - نبعت اهتمام وحد بس
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ interests: ['FINANCE'] });
+
+    expect(res.statusCode).toBe(200);
+    // لازم يكون بس FINANCE، مش تراكم مع القديم
+    expect(res.body.user.interests).toEqual(['FINANCE']);
+  });
+});
