@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 
 const { getProfile, updateProfile } = require('../controllers/profileController');
-const authMiddleware = require('../middlewares/authMiddleware');
+const {protect: authMiddleware} = require('../middlewares/authMiddleware');
 
 const { updateProfileRules, validate } = require('../validators/profileValidator');
 const uploadMiddleware = require('../middlewares/uploadMiddleware');

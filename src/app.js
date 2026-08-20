@@ -19,9 +19,13 @@ app.get('/', (req, res) => {
   res.send('Pay Per View API is Running...');
 });
 
+
 // Routes
 const authRoutes = require('./routes/authRoutes');
 app.use('/api/v1/auth', authRoutes);
+
+const profileRoutes = require('./routes/profileRoutes');
+app.use('/api/v1/profile', profileRoutes);
 
 const path = require('path');
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
