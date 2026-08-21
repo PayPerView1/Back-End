@@ -9,6 +9,7 @@ const {
   forgotPassword,
   resetPassword,
   changePassword,
+  updateInterests,
   logout,
 } = require('../controllers/authController');
 
@@ -107,6 +108,7 @@ router.post('/reset-password/:token', resetPassword);
 
 // Protected Routes (مسارات تتطلب تسجيل الدخول وتوفير الـ JWT)
 router.patch('/change-password', protect, changePassword);
+router.patch('/interests', protect, updateInterests);
 router.post('/logout', protect, logout);
 
 // 1. مسار توجيه المستخدم لصفحة Google
@@ -134,6 +136,7 @@ router.get(
         country: req.user.country,
         city: req.user.city,
         profilePicture: req.user.profilePicture,
+        interests: req.user.interests,
       },
     });
   }

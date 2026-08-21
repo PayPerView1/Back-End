@@ -74,7 +74,8 @@ exports.register = async (req, res) => {
       await sendEmail({
         email: user.email,
         subject: 'Account Activation - Pay Per View',
-        message: `Welcome to our platform! Please activate your account by clicking the link below: ${activationUrl}`,
+        message: `Welcome to our platform! Please activate your account by 
+        clicking the link below: (This link will be expired in 24 hours) ${activationUrl}`,
       });
 
       return res.status(201).json({
@@ -370,4 +371,60 @@ exports.logout = async (req, res) => {
     success: true,
     message: 'Logged out successfully.',
   });
+};
+
+// @desc    Update user interests (US-AUTH-01 / Onboarding Step 3)
+// @route   PATCH /api/v1/auth/interests
+// @access  Private
+exports.updateInterests = async (req, res) => {
+  try {
+    const { interests } = req.body;
+
+    // التحقق من أن المفهوم الممرر هو Array
+    if (!interests || !Array.isArray(interests)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide an array of interests.',
+      });
+    }
+
+    // التحقق من أن جميع العناصر الممررة تنتمي للقائمة المسموحة
+    const ALLOWED_INTERESTS = [
+      'LIFESTYLE',
+      'TECHNOLOGY',
+      'EDUCATION',
+      'ENTERTAINMENT',
+      'FINANCE',
+      'HEALTH',
+    ];
+
+    const isValid = interests.every((item) => ALLOWED_INTERESTS.includes(item));
+    if (!isValid) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid interest value. Allowed values are: ${ALLOWED_INTERESTS.join(', ')}`,
+      });
+    }
+
+    // تحديث المستخدم الحالي (المأخوذ من protect middleware)
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      { interests },
+      { new: true, runValidators: true }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Interests updated successfully!',
+      data: {
+        id: user._id,
+        interests: user.interests,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
 };
