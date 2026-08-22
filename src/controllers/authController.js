@@ -66,7 +66,7 @@ exports.register = async (req, res) => {
     const verificationToken = user.createEmailVerificationToken();
     await user.save();
 
-    const clientUrl = process.env.CLIENT_URL || `${req.protocol}://${req.get('host')}`;
+    const clientUrl = process.env.BACKEND_URL || `${req.protocol}://${req.get('host')}`;
     const activationUrl = `${clientUrl}/api/v1/auth/verify-email/${verificationToken}`;
 
     // ✅ الانتظار حتى يتم إرسال الإيميل بنجاح قبل إرجاع الـ Response
@@ -220,8 +220,8 @@ exports.forgotPassword = async (req, res) => {
 
     await user.save({ validateBeforeSave: false });
 
-    const clientUrl = process.env.CLIENT_URL || `${req.protocol}://${req.get('host')}`;
-    const resetUrl = `${clientUrl}/api/v1/auth/reset-password/${resetToken}`;
+    const clientUrl = process.env.FRONTEND_URL || `${req.protocol}://${req.get('host')}`;
+    const resetUrl = `${clientUrl}/reset-password/${resetToken}`;
 
     // ✅ الانتظار باستخدام await مع الإيميل ومعالجة الفشل
     try {

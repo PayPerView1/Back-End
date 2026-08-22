@@ -123,22 +123,9 @@ router.get(
     const token = generateToken(req.user._id, req.user.role);
 
     // إرجاع النتيجة فوراً للمتصفح لاختبار السيرفر
-    res.json({
-      success: true,
-      message: 'تم تسجيل الدخول بواسطة Google بنجاح!',
-      token,
-      user: {
-        id: req.user._id,
-        name: req.user.fullName,
-        email: req.user.email,
-        role: req.user.role,
-        phoneNumber: req.user.phoneNumber,
-        country: req.user.country,
-        city: req.user.city,
-        profilePicture: req.user.profilePicture,
-        interests: req.user.interests,
-      },
-    });
+    res.redirect(
+  `${process.env.BACKEND_URL}/api/v1/auth/google/callback?token=${token}`
+);
   }
 );
 module.exports = router;
