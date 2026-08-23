@@ -66,8 +66,8 @@ exports.register = async (req, res) => {
     const verificationToken = user.createEmailVerificationToken();
     await user.save();
 
-    const clientUrl = process.env.BACKEND_URL || `${req.protocol}://${req.get('host')}`;
-    const activationUrl = `${clientUrl}/api/v1/auth/verify-email/${verificationToken}`;
+    const clientUrl = process.env.FRONTEND_URL || `${req.protocol}://${req.get('host')}`;
+    const activationUrl = `${clientUrl}/register/verify/${verificationToken}`;
 
     // ✅ الانتظار حتى يتم إرسال الإيميل بنجاح قبل إرجاع الـ Response
     try {
