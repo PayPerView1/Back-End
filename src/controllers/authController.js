@@ -220,8 +220,8 @@ exports.forgotPassword = async (req, res) => {
 
     await user.save({ validateBeforeSave: false });
 
-    const clientUrl = process.env.FRONTEND_URL || `${req.protocol}://${req.get('host')}`;
-    const resetUrl = `${clientUrl}/en/reset-password/${resetToken}`;
+    const clientUrl = process.env.BACKEND_URL || `${req.protocol}://${req.get('host')}`;
+    const resetUrl = `${clientUrl}/api/v1/auth/reset-password/${resetToken}`;
 
     // ✅ الانتظار باستخدام await مع الإيميل ومعالجة الفشل
     try {
