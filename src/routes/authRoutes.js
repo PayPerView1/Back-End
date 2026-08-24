@@ -112,7 +112,7 @@ router.patch('/interests', protect, updateInterests);
 router.post('/logout', protect, logout);
 
 // 1. مسار توجيه المستخدم لصفحة Google
-router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'], prompt: 'select_account' }));
 
 // 2. مسار العودة بعد نجاح تسجيل الدخول من Google
 router.get(
