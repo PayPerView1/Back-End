@@ -117,14 +117,14 @@ router.get('/google', passport.authenticate('google', { scope: ['profile', 'emai
 // 2. مسار العودة بعد نجاح تسجيل الدخول من Google
 router.get(
   '/google/callback',
-  passport.authenticate('google', { session: false, failureRedirect: '/login' }),
+  passport.authenticate('google', { session: false, failureRedirect: `${process.env.FRONTEND_URL}/login?error=google_auth_failed`}),
   (req, res) => {
     // توليد الـ JWT Token الخاص بنظامك
     const token = generateToken(req.user._id, req.user.role);
 
     // إرجاع النتيجة فوراً للمتصفح لاختبار السيرفر
     res.redirect(
-  `${process.env.BACKEND_URL}/api/v1/auth/google/callback?token=${token}`
+  `${process.env.FRONTEND_URL}/dashboard?token=${token}`
 );
   }
 );
