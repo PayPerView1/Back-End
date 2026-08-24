@@ -11,6 +11,7 @@ const {
   changePassword,
   updateInterests,
   logout,
+  updateInterests
 } = require('../controllers/authController');
 
 const uploadMiddleware = require('../middlewares/uploadMiddleware');
