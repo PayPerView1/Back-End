@@ -3,6 +3,7 @@ const { body, validationResult } = require('express-validator');
 const { isValidPhoneNumber } = require('libphonenumber-js');
 const countries = require('i18n-iso-countries');
 const enLocale = require('i18n-iso-countries/langs/en.json');
+const User = require('../models/user');
 
 countries.registerLocale(enLocale);
 
@@ -11,6 +12,7 @@ countries.registerLocale(enLocale);
 // Object.keys بتاخد بس الأكواد (AF, AL, ...) وتجاهل الأسماء
 const VALID_COUNTRIES = Object.keys(countries.getNames('en'));
 
+// نفس القيم المسموحة الموجودة بموديل User - لازم تضل متطابقة معه دايمًا
 const VALID_INTERESTS = [
   'LIFESTYLE',
   'TECHNOLOGY',
@@ -44,23 +46,50 @@ const updateProfileRules = [
     .isIn(VALID_COUNTRIES)
     .withMessage('Please provide a valid country code'),
 
-  // فحص رقم الهاتف مرتبط فعليًا بحقل country
-  // لازم ياخد قيمة country من باقي الـ body عشان يتحقق صح
+  body('username')
+    .optional({ checkFalsy: true })
+    .trim()
+    .isLength({ min: 3, max: 20 })
+    .withMessage('Username must be between 3 and 20 characters')
+    .matches(/^[a-zA-Z0-9_]+$/)
+    .withMessage('Username can only contain English letters, numbers, and underscore')
+    .custom(async (value, { req }) => {
+      // بندور إذا في مستخدم تاني (مش أنا نفسي) عنده نفس الـ username
+      const existingUser = await User.findOne({ username: value.toLowerCase() });
+ 
+      if (existingUser && existingUser._id.toString() !== req.user._id.toString()) {
+        throw new Error('This username is already taken');
+      }
+ 
+      return true;
+    }),
+
+  // مقدمة الدولة (رمز الاتصال الدولي) - مثال: +970, +962, +1
+  body('phoneCountryCode')
+    .optional()
+    .trim()
+    .matches(/^\+[1-9]\d{0,3}$/)
+    .withMessage('Country code must start with + followed by 1 to 4 digits (e.g. +970)'),
+
+  // فحص رقم الهاتف مرتبط فعليًا بحقل phoneCountryCode (مش country المستخدمة لعنوان السكن)
+  // بندمج المقدمة + الرقم مع بعض ونتحقق من الرقم الكامل الناتج
   body('phoneNumber')
     .optional()
     .trim()
     .custom((value, { req }) => {
-      const country = req.body.country;
+      const countryCode = req.body.phoneCountryCode;
 
-      // إذا المستخدم بعت رقم هاتف بدون ما يحدد الدولة، ما فينا نتحقق منه صح
-      if (!country) {
-        throw new Error('Country is required to validate phone number');
+      // إذا المستخدم بعت رقم هاتف بدون ما يحدد المقدمة، ما فينا نتحقق منه صح
+      if (!countryCode) {
+        throw new Error('Phone country code (prefix) is required to validate phone number');
       }
 
-      // isValidPhoneNumber بتاخد الرقم وكود الدولة (PS, JO...)
-      // وبترجع true/false بناءً على قواعد تلك الدولة بالتحديد
-      if (!isValidPhoneNumber(value, country)) {
-        throw new Error(`Phone number is not valid for the selected country (${country})`);
+      const fullNumber = `${countryCode}${value}`;
+
+      // isValidPhoneNumber هون بتاخد الرقم كامل بصيغة E.164 (مقدمة + رقم مدمجين)
+      // وبتتحقق من صحته بناءً على قواعد تلك المقدمة بالتحديد
+      if (!isValidPhoneNumber(fullNumber)) {
+        throw new Error(`Phone number is not valid for the given country code (${countryCode})`);
       }
 
       return true;
@@ -80,6 +109,7 @@ const updateProfileRules = [
     .isURL()
     .withMessage('Profile picture must be a valid URL'),
 
+  // الاهتمامات - اختيارية بالكامل، المستخدم فيه يختار وحدة، أكتر من وحدة، كلهم، أو ولا وحدة
   body('interests')
     .optional()
     .isArray()
@@ -87,14 +117,47 @@ const updateProfileRules = [
     .custom((value) => {
       // كل عنصر بالمصفوفة لازم يكون من القيم المسموحة
       const invalidValues = value.filter((v) => !VALID_INTERESTS.includes(v));
- 
+
       if (invalidValues.length > 0) {
         throw new Error(`Invalid interests: ${invalidValues.join(', ')}`);
       }
- 
+
       return true;
     }),
-    
+
+  // تاريخ الميلاد - لازم يكون تاريخ صحيح، مش بالمستقبل، وعمر لا يقل عن 13 سنة
+  body('dateOfBirth')
+    .optional()
+    .isISO8601()
+    .withMessage('Date of birth must be a valid date (format: YYYY-MM-DD)')
+    .toDate()
+    .custom((value) => {
+      const today = new Date();
+
+      if (value > today) {
+        throw new Error('Date of birth cannot be in the future');
+      }
+
+      // حساب العمر بالسنوات بدقة (مع مراعاة الشهر واليوم، مش بس الفرق بالسنة)
+      let age = today.getFullYear() - value.getFullYear();
+      const monthDiff = today.getMonth() - value.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < value.getDate())) {
+        age--;
+      }
+
+      if (age < 13) {
+        throw new Error('User must be at least 13 years old');
+      }
+
+      return true;
+    }),
+
+  // البايو - نص حر، حد أقصى 300 حرف
+  body('bio')
+    .optional({ checkFalsy: true })
+    .trim()
+    .isLength({ max: 300 })
+    .withMessage('Bio must not exceed 300 characters'),
 ];
 
 // Middleware بيفحص نتيجة التحقق ويرجع الأخطاء لو في

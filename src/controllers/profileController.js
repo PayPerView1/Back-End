@@ -37,13 +37,16 @@ const updateProfile = async (req, res) => {
 
     // بنحدد بس الحقول المسموح للمستخدم يعدلها
     // (متعمّدين ما نسمح بتعديل email أو role أو password من هون)
-    const { fullName, phoneNumber, country, city, profilePicture, interests } = req.body;
+    const { fullName, username, phoneCountryCode, phoneNumber, country, city, profilePicture, interests , dateOfBirth, bio } = req.body;
 
     if (fullName !== undefined) user.fullName = fullName;
+    if (username !== undefined) user.username = username;
+    if (phoneCountryCode !== undefined) user.phoneCountryCode = phoneCountryCode;
     if (phoneNumber !== undefined) user.phoneNumber = phoneNumber;
     if (country !== undefined) user.country = country;
     if (city !== undefined) user.city = city;
-
+    if (dateOfBirth !== undefined) user.dateOfBirth = dateOfBirth;
+    if (bio !== undefined) user.bio = bio;
     // الاهتمامات: بتستبدل المصفوفة بالكامل بكل مرة (مش تراكمية)
     // يعني لو المستخدم بده يشيل اهتمام، الفرونت إند يبعت المصفوفة الجديدة بدونه
     if (interests !== undefined) user.interests = interests;
@@ -68,16 +71,29 @@ const updateProfile = async (req, res) => {
       user: {
         _id: updatedUser._id,
         fullName: updatedUser.fullName,
+        username: updatedUser.username,
         email: updatedUser.email,
         role: updatedUser.role,
         profilePicture: updatedUser.profilePicture,
+        phoneCountryCode: updatedUser.phoneCountryCode,
         phoneNumber: updatedUser.phoneNumber,
         country: updatedUser.country,
         city: updatedUser.city,
+        dateOfBirth: updatedUser.dateOfBirth,
+        bio: updatedUser.bio,
         interests: updatedUser.interests,
       },
     });
   } catch (error) {
+    // احتياط إضافي: لو صار تعارض تكرار على مستوى قاعدة البيانات نفسها
+    // (حالة نادرة جدًا لو وصل طلبين بنفس اللحظة بالظبط بنفس username)
+    if (error.code === 11000 && error.keyPattern?.username) {
+      return res.status(400).json({
+        success: false,
+        errors: [{ field: 'username', message: 'This username is already taken' }],
+      });
+    }
+    
     console.error(`Update Profile Error: ${error.message}`);
     res.status(500).json({ message: 'Server error while updating profile' });
   }

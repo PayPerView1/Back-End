@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const passport = require('passport');
 
+
 require('./config/passport');
 
 const app = express();
@@ -23,6 +24,8 @@ app.get('/', (req, res) => {
 // Routes
 const authRoutes = require('./routes/authRoutes');
 app.use('/api/v1/auth', authRoutes);
+const profileRoutes = require('./routes/profileRoutes');
+app.use('/api/v1/profile', profileRoutes);
 
 const profileRoutes = require('./routes/profileRoutes');
 app.use('/api/v1/profile', profileRoutes);

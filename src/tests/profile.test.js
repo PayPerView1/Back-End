@@ -1,11 +1,13 @@
 // tests/profile.test.js
+require('dotenv').config();
+
 const request = require('supertest');
 const mongoose = require('mongoose');
 const { MongoMemoryServer } = require('mongodb-memory-server');
 
-const app = require('../app'); // عدّل المسار حسب مكان app.js عندك
-const User = require('../models/user'); // عدّل المسار حسب مكان الموديل عندك
-const generateToken = require('../utils/generateTokens'); // عدّل المسار حسب مكان الملف عندك
+const app = require('../app');
+const User = require('../models/user');
+const generateToken = require('../utils/generateTokens');
 
 let mongoServer;
 let testUser;
@@ -88,15 +90,45 @@ describe('PUT /api/v1/profile - تحديث صحيح', () => {
     expect(res.body.user.fullName).toBe('Ahmad Khalil');
   });
 
-  it('لازم يعدل رقم الهاتف والدولة مع بعض بنجاح', async () => {
+  it('لازم يعدل رقم الهاتف مع مقدمة الدولة بنجاح', async () => {
     const res = await request(app)
       .put('/api/v1/profile')
       .set('Authorization', `Bearer ${token}`)
-      .send({ country: 'JO', phoneNumber: '791234567' });
+      .send({ phoneCountryCode: '+962', phoneNumber: '791234567' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.user.phoneCountryCode).toBe('+962');
+    expect(res.body.user.phoneNumber).toBe('791234567');
+  });
+
+  it('لازم يعدل الدولة (بلد السكن) بشكل مستقل عن الهاتف', async () => {
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ country: 'JO' });
 
     expect(res.statusCode).toBe(200);
     expect(res.body.user.country).toBe('JO');
-    expect(res.body.user.phoneNumber).toBe('791234567');
+  });
+
+  it('لازم يعدل تاريخ الميلاد بنجاح', async () => {
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ dateOfBirth: '1998-05-20' });
+
+    expect(res.statusCode).toBe(200);
+    expect(new Date(res.body.user.dateOfBirth).toISOString().slice(0, 10)).toBe('1998-05-20');
+  });
+
+  it('لازم يعدل البايو بنجاح', async () => {
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ bio: 'مطور Backend شغوف بالتعلم المستمر.' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.user.bio).toBe('مطور Backend شغوف بالتعلم المستمر.');
   });
 
   it('لازم يقبل اسم فيه شرطة أو نقطة أو فاصلة عليا', async () => {
@@ -135,17 +167,27 @@ describe('PUT /api/v1/profile - حالات الخطأ', () => {
     expect(res.body.errors.some((e) => e.field === 'country')).toBe(true);
   });
 
-  it('لازم يرفض رقم هاتف غلط لدولة محددة', async () => {
+  it('لازم يرفض مقدمة دولة (prefix) بصيغة غلط', async () => {
     const res = await request(app)
       .put('/api/v1/profile')
       .set('Authorization', `Bearer ${token}`)
-      .send({ country: 'PS', phoneNumber: '123' });
+      .send({ phoneCountryCode: '970', phoneNumber: '599123456' }); // بدون علامة +
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.errors.some((e) => e.field === 'phoneCountryCode')).toBe(true);
+  });
+
+  it('لازم يرفض رقم هاتف غلط لمقدمة دولة محددة', async () => {
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ phoneCountryCode: '+970', phoneNumber: '123' });
 
     expect(res.statusCode).toBe(400);
     expect(res.body.errors.some((e) => e.field === 'phoneNumber')).toBe(true);
   });
 
-  it('لازم يرفض رقم هاتف بدون تحديد دولة بنفس الطلب', async () => {
+  it('لازم يرفض رقم هاتف بدون تحديد مقدمة الدولة بنفس الطلب', async () => {
     const res = await request(app)
       .put('/api/v1/profile')
       .set('Authorization', `Bearer ${token}`)
@@ -153,6 +195,52 @@ describe('PUT /api/v1/profile - حالات الخطأ', () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.body.errors.some((e) => e.field === 'phoneNumber')).toBe(true);
+  });
+
+  it('لازم يرفض تاريخ ميلاد بالمستقبل', async () => {
+    const futureDate = new Date();
+    futureDate.setFullYear(futureDate.getFullYear() + 1);
+
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ dateOfBirth: futureDate.toISOString().slice(0, 10) });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.errors.some((e) => e.field === 'dateOfBirth')).toBe(true);
+  });
+
+  it('لازم يرفض عمر أقل من 13 سنة', async () => {
+    const today = new Date();
+    const tooYoungDate = new Date(today.getFullYear() - 5, today.getMonth(), today.getDate());
+
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ dateOfBirth: tooYoungDate.toISOString().slice(0, 10) });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.errors.some((e) => e.field === 'dateOfBirth')).toBe(true);
+  });
+
+  it('لازم يرفض تاريخ ميلاد بصيغة غير صحيحة', async () => {
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ dateOfBirth: 'not-a-date' });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.errors.some((e) => e.field === 'dateOfBirth')).toBe(true);
+  });
+
+  it('لازم يرفض بايو أطول من 300 حرف', async () => {
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ bio: 'a'.repeat(301) });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.errors.some((e) => e.field === 'bio')).toBe(true);
   });
 
   it('لازم يرفض رابط صورة غير صحيح', async () => {
@@ -299,5 +387,86 @@ describe('PUT /api/v1/profile - الاهتمامات', () => {
     expect(res.statusCode).toBe(200);
     // لازم يكون بس FINANCE، مش تراكم مع القديم
     expect(res.body.user.interests).toEqual(['FINANCE']);
+  });
+});
+
+// ============================================
+// اختبارات PUT /api/v1/profile - اسم المستخدم (Username)
+// ============================================
+describe('PUT /api/v1/profile - اسم المستخدم', () => {
+  it('لازم يقبل username صحيح وفريد', async () => {
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ username: 'ahmad_khalil99' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.user.username).toBe('ahmad_khalil99');
+  });
+
+  it('لازم يحفظ username بحروف صغيرة دايمًا (lowercase)', async () => {
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ username: 'AhmadKhalil' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.user.username).toBe('ahmadkhalil');
+  });
+
+  it('لازم يرفض username أقصر من 3 أحرف', async () => {
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ username: 'ab' });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.errors.some((e) => e.field === 'username')).toBe(true);
+  });
+
+  it('لازم يرفض username فيه رموز أو مسافات غير مسموحة', async () => {
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ username: 'ahmad khalil!' });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.errors.some((e) => e.field === 'username')).toBe(true);
+  });
+
+  it('لازم يرفض username مكرر مستخدم من شخص تاني', async () => {
+    // بننشئ مستخدم تاني وناخدله username
+    await User.create({
+      fullName: 'Second User',
+      email: 'second@example.com',
+      password: 'hashedPassword123',
+      role: 'CLIPPER',
+      username: 'takenname',
+    });
+
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ username: 'takenname' });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.errors.some((e) => e.field === 'username')).toBe(true);
+  });
+
+  it('لازم يسمح للمستخدم يحدث بياناته بنفس الـ username تبعه (بدون ما يعتبره تكرار)', async () => {
+    // أول تحديث - نحط username
+    await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ username: 'myusername' });
+
+    // ثاني تحديث - نبعت نفس الـ username مع حقل تاني
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ username: 'myusername', bio: 'تحديث ثاني' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.user.username).toBe('myusername');
   });
 });
