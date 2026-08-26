@@ -125,7 +125,7 @@ router.get(
 
     // إرجاع النتيجة فوراً للمتصفح لاختبار السيرفر
     res.redirect(
-  `${process.env.FRONTEND_URL}/dashboard?token=${token}`
+  `${process.env.FRONTEND_URL}/auth/callback?token=${token}`
 );
   }
 );
