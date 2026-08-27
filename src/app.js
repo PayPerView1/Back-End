@@ -27,8 +27,7 @@ app.use('/api/v1/auth', authRoutes);
 const profileRoutes = require('./routes/profileRoutes');
 app.use('/api/v1/profile', profileRoutes);
 
-const profileRoutes = require('./routes/profileRoutes');
-app.use('/api/v1/profile', profileRoutes);
+
 
 const path = require('path');
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));

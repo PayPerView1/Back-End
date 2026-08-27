@@ -106,6 +106,34 @@ const userSchema = new mongoose.Schema(
     timestamps: true, // يضيف createdAt و updatedAt تلقائياً
   }
 );
+// تشفير كلمة المرور قبل الحفظ إذا تم تعديلها أو إضافتها
+userSchema.pre('save', async function () {
+  if (!this.isModified('password') || !this.password) return;
 
+  const salt = await bcrypt.genSalt(10);
+  this.password = await bcrypt.hash(this.password, salt);
+});
+
+// دالة مقارنة كلمة المرور عند تسجيل الدخول
+userSchema.methods.matchPassword = async function (enteredPassword) {
+  if (!this.password) return false;
+  return await bcrypt.compare(enteredPassword, this.password);
+};
+
+
+// دالة إنشاء رمز تفعيل الإيميل
+userSchema.methods.createEmailVerificationToken = function () {
+  const verificationToken = crypto.randomBytes(32).toString('hex');
+
+  this.emailVerificationToken = crypto
+    .createHash('sha256')
+    .update(verificationToken)
+    .digest('hex');
+
+  // تنتهي صلاحيته بعد 24 ساعة
+  this.emailVerificationExpires = Date.now() + 24 * 60 * 60 * 1000;
+
+  return verificationToken;
+};
 module.exports = mongoose.model('User', userSchema);
 module.exports.INTEREST_OPTIONS = INTEREST_OPTIONS;
