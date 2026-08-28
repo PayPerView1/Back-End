@@ -18,6 +18,7 @@ exports.register = async (req, res) => {
       password, 
       role, 
       phoneNumber, 
+      phoneCountryCode,
       country, 
       city, 
       profilePicture 
