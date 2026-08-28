@@ -1,6 +1,7 @@
 // src/models/User.js
 const mongoose = require('mongoose');
-
+const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 // القيم المسموحة للاهتمامات - أي قيمة تانية غير هدول بترفض تلقائيًا من Mongoose نفسه
 const INTEREST_OPTIONS = [
   'LIFESTYLE',    // نمط الحياة
@@ -35,9 +36,14 @@ const userSchema = new mongoose.Schema(
     },
     password: {
       type: String,
-      required: [true, 'Please provide a password'],
-      minlength: 8,
-      select: false, // لا ينزل الباسورد تلقائياً في الاستعلامات لحماية الأمان
+      required: [
+        function () {
+          return !this.googleId;
+        },
+        'Please provide a password',
+      ],
+      minlength: [8, 'Password must be at least 8 characters long'],
+      select: false, // يمنع إرجاع الباسورد في الاستعلامات العادية
     },
 
     // R0.03: نوع الحساب (Brand / Clipper / Admin)
@@ -47,6 +53,10 @@ const userSchema = new mongoose.Schema(
       default: 'CLIPPER',
       required: true,
     },
+    googleId: {
+      type: String,
+      default: null,
+    },    
 
     // R0.04: تفاصيل الملف الشخصي
     profilePicture: {
