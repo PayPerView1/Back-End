@@ -177,7 +177,66 @@ const validate = (req, res, next) => {
   next();
 };
 
+// ///////////////// Registration rules for authentication //////////////////////////
+const registerRules = [
+  body('fullName')
+    .optional()
+    .trim()
+    .isLength({ min: 2, max: 50 })
+    .withMessage('Full name must be between 2 and 50 characters')
+    .matches(/^[a-zA-Zء-ي\s'.-]+$/)
+    .withMessage('Full name must contain letters only')
+    .custom((value) => {
+      if (/^[-'.]|[-'.]$/.test(value) || /[-'.]{2,}/.test(value)) {
+        throw new Error('Full name format is invalid');
+      }
+      return true;
+    }),
+
+  body('country')
+    .optional()
+    .trim()
+    .isIn(VALID_COUNTRIES)
+    .withMessage('Please provide a valid country code'),
+
+  body('phoneCountryCode')
+    .optional()
+    .trim()
+    .matches(/^\+[1-9]\d{0,3}$/)
+    .withMessage('Country code must start with + followed by 1 to 4 digits (e.g. +970)'),
+
+  body('phoneNumber')
+    .optional()
+    .trim()
+    .custom((value, { req }) => {
+      const countryCode = req.body.phoneCountryCode;
+
+      if (!countryCode) return true; // ← إذا ما في مقدمة، تجاهل
+
+      const fullNumber = `${countryCode}${value}`;
+      if (!isValidPhoneNumber(fullNumber)) {
+        throw new Error(`Phone number is not valid for the given country code (${countryCode})`);
+      }
+      return true;
+    }),
+
+  body('city')
+    .optional()
+    .trim()
+    .isLength({ min: 2, max: 50 })
+    .withMessage('City must be between 2 and 50 characters')
+    .matches(/^[a-zA-Zء-ي\s'-]+$/)
+    .withMessage('City must contain letters only'),
+
+  body('profilePicture')
+    .optional({ checkFalsy: true })
+    .trim()
+    .isURL()
+    .withMessage('Profile picture must be a valid URL'),
+];
+// /////////////End of Registration rules for authentication //////////////////////////
 module.exports = {
   updateProfileRules,
+  registerRules,
   validate,
 };

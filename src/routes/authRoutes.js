@@ -14,7 +14,7 @@ const {
 } = require('../controllers/authController');
 
 const uploadMiddleware = require('../middlewares/uploadMiddleware');
-const { updateProfileRules, validate } = require('../validators/profileValidator');
+const { updateProfileRules,registerRules, validate } = require('../validators/profileValidator');
 
 // 1. استدعاء الـ Middleware للحماية
 const { protect } = require('../middlewares/authMiddleware');
@@ -23,7 +23,7 @@ const { protect } = require('../middlewares/authMiddleware');
 router.post(
   '/register',
   uploadMiddleware,   // يتعامل مع رفع الملف إن وجد (req.file)
-  updateProfileRules, // يتأكد من صحة رقم الهاتف والدولة والمدينة
+  registerRules, // يتأكد من صحة رقم الهاتف والدولة والمدينة
   validate,           // يرجع أخطاء الـ Validation إن وجدت
   register
 );
