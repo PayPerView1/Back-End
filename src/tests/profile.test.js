@@ -469,4 +469,49 @@ describe('PUT /api/v1/profile - اسم المستخدم', () => {
     expect(res.statusCode).toBe(200);
     expect(res.body.user.username).toBe('myusername');
   });
+
+  it('لازم يسمح لأكتر من مستخدم يبعتوا username فاضي ("") بدون أي تعارض', async () => {
+    // بننشئ مستخدم تاني، وبنبعتله هو كمان username فاضي
+    const secondUser = await User.create({
+      fullName: 'Second User',
+      email: 'second-empty@example.com',
+      password: 'hashedPassword123',
+      role: 'CLIPPER',
+    });
+    const secondToken = generateToken(secondUser._id, secondUser.role);
+
+    // المستخدم الأول يبعت username فاضي
+    const res1 = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ username: '' });
+
+    // المستخدم الثاني يبعت username فاضي كمان بنفس اللحظة تقريبًا
+    const res2 = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${secondToken}`)
+      .send({ username: '' });
+
+    // الاثنين لازم ينجحوا، بدون أي تعارض unique
+    expect(res1.statusCode).toBe(200);
+    expect(res2.statusCode).toBe(200);
+  });
+
+  it('لازم يشيل الـ username فعليًا (undefined) لو انبعت فاضي، مش يخزنه كنص فاضي', async () => {
+    // أول شي نحط username حقيقي
+    await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ username: 'willberemoved' });
+
+    // بعدين نبعته فاضي
+    const res = await request(app)
+      .put('/api/v1/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ username: '' });
+
+    expect(res.statusCode).toBe(200);
+    // لازم يكون undefined فعليًا (الحقل غايب)، مش نص فاضي ""
+    expect(res.body.user.username).toBeUndefined();
+  });
 });

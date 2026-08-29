@@ -1,5 +1,5 @@
 // src/controllers/profileController.js
-const User = require('../models/user'); 
+const User = require('../models/user'); // عدّل المسار حسب مكان الملف عندك
 
 // @desc    جلب بيانات البروفايل الخاصة بالمستخدم الحالي
 // @route   GET /api/profile
@@ -37,20 +37,33 @@ const updateProfile = async (req, res) => {
 
     // بنحدد بس الحقول المسموح للمستخدم يعدلها
     // (متعمّدين ما نسمح بتعديل email أو role أو password من هون)
-    const { fullName, username, phoneCountryCode, phoneNumber, country, city, profilePicture, interests , dateOfBirth, bio } = req.body;
+    const {
+      fullName,
+      username,
+      phoneCountryCode,
+      phoneNumber,
+      country,
+      city,
+      profilePicture,
+      interests,
+      dateOfBirth,
+      bio,
+    } = req.body;
 
     if (fullName !== undefined) user.fullName = fullName;
-    if (username !== undefined) user.username = username;
+    // لو المستخدم بعت username فاضي (""), نعتبره "إزالة" لليوزرنيم مش قيمة فعلية
+    // عشان ما يتعارض مع unique index لو أكتر من مستخدم بعتوا فاضي بنفس الوقت
+    if (username !== undefined) user.username = username ? username.toLowerCase() : undefined;
     if (phoneCountryCode !== undefined) user.phoneCountryCode = phoneCountryCode;
     if (phoneNumber !== undefined) user.phoneNumber = phoneNumber;
     if (country !== undefined) user.country = country;
     if (city !== undefined) user.city = city;
     if (dateOfBirth !== undefined) user.dateOfBirth = dateOfBirth;
     if (bio !== undefined) user.bio = bio;
+
     // الاهتمامات: بتستبدل المصفوفة بالكامل بكل مرة (مش تراكمية)
     // يعني لو المستخدم بده يشيل اهتمام، الفرونت إند يبعت المصفوفة الجديدة بدونه
     if (interests !== undefined) user.interests = interests;
-
 
     // الصورة: إما ملف مرفوع فعليًا (req.file من multer) أو رابط نصي (profilePicture بالـ body)
     // الأولوية للملف المرفوع لو الاتنين وصلوا بنفس الطلب بالغلط
@@ -62,7 +75,6 @@ const updateProfile = async (req, res) => {
       user.profilePicture = profilePicture;
     }
 
-    
     const updatedUser = await user.save();
 
     res.status(200).json({
@@ -79,9 +91,9 @@ const updateProfile = async (req, res) => {
         phoneNumber: updatedUser.phoneNumber,
         country: updatedUser.country,
         city: updatedUser.city,
+        interests: updatedUser.interests,
         dateOfBirth: updatedUser.dateOfBirth,
         bio: updatedUser.bio,
-        interests: updatedUser.interests,
       },
     });
   } catch (error) {
@@ -93,7 +105,7 @@ const updateProfile = async (req, res) => {
         errors: [{ field: 'username', message: 'This username is already taken' }],
       });
     }
-    
+
     console.error(`Update Profile Error: ${error.message}`);
     res.status(500).json({ message: 'Server error while updating profile' });
   }
