@@ -59,7 +59,17 @@ const campaignDraftSchema = new mongoose.Schema(
     targetCountries: { type: [String], default: [] },
 
     halalDeclared: { type: Boolean, default: false },
-
+    copyInfo: {
+      isCopy: { 
+        type: Boolean, 
+        default: false 
+      },
+      copiedFromId: { 
+        type: mongoose.Schema.Types.ObjectId, 
+        ref: 'Campaign', 
+        default: null 
+      },
+    },
     materials: {
       type: [draftMaterialSchema],
       default: [],

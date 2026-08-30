@@ -2,6 +2,9 @@ const express = require('express');
 const passport = require('passport');
 const generateToken = require('../utils/generateTokens');
 const router = express.Router();
+
+const uploadMiddleware = require('../middlewares/uploadMiddleware');
+const { updateProfileRules,registerRules, validate } = require('../validators/profileValidator');
 const {
   register,
   verifyEmail,
@@ -13,8 +16,7 @@ const {
   logout,
 } = require('../controllers/authController');
 
-const uploadMiddleware = require('../middlewares/uploadMiddleware');
-const { updateProfileRules,registerRules, validate } = require('../validators/profileValidator');
+
 
 // 1. استدعاء الـ Middleware للحماية
 const { protect } = require('../middlewares/authMiddleware');
