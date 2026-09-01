@@ -8,6 +8,7 @@ const { updateProfileRules,registerRules, validate } = require('../validators/pr
 const {
   register,
   verifyEmail,
+   resendVerification,
   login,
   forgotPassword,
   resetPassword,
@@ -30,6 +31,7 @@ router.post(
   register
 );
 router.get('/verify-email/:token', verifyEmail);
+router.post('/resend-verification', resendVerification);
 router.post('/login', login);
 router.post('/forgot-password', forgotPassword);
 // 👈 مسار GET لعرض صفحة HTML لإعادة تعيين كلمة المرور

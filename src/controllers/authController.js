@@ -105,6 +105,76 @@ exports.register = async (req, res) => {
   }
 };
 
+
+// @desc    Resend Activation Email (US-AUTH-01 / R0.09)
+// @route   POST /api/v1/auth/resend-verification
+// @access  Public
+exports.resendVerification = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide an email address.',
+      });
+    }
+
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'There is no user registered with that email.',
+      });
+    }
+
+    if (user.isVerified) {
+      return res.status(400).json({
+        success: false,
+        message: 'This account is already verified. You can log in.',
+      });
+    }
+
+    // Generate a new verification token and expiration
+    const verificationToken = user.createEmailVerificationToken();
+    await user.save({ validateBeforeSave: false });
+
+    const clientUrl = process.env.FRONTEND_URL || `${req.protocol}://${req.get('host')}`;
+    const activationUrl = `${clientUrl}/register/verify/${verificationToken}`;
+
+    try {
+      await sendEmail({
+        email: user.email,
+        subject: 'Account Activation - Pay Per View',
+        message: `Welcome to our platform! Please activate your account by
+        clicking the link below: (This link will be expired in 24 hours) ${activationUrl}`,
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: 'Activation email sent successfully! Please check your inbox.',
+      });
+    } catch (emailError) {
+      user.emailVerificationToken = undefined;
+      user.emailVerificationExpires = undefined;
+      await user.save({ validateBeforeSave: false });
+
+      console.error('[EMAIL ERROR]:', emailError.message);
+      return res.status(500).json({
+        success: false,
+        message: 'There was an error sending the activation email. Please try again later.',
+      });
+    }
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 // @desc    Verify Email via Token (US-AUTH-01 / R0.09)
 // @route   GET /api/v1/auth/verify-email/:token
 // @access  Public
