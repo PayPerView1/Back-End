@@ -1,31 +1,19 @@
 // src/services/campaign/fileUpload.service.js
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
-const { v4: uuidv4 } = require('uuid');
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const cloudinary = require('../../config/cloudinary');
 const { MATERIAL_CONSTRAINTS, MATERIAL_TYPE } = require('../../constants/campaign.constants');
 
-// ⚠️ ملاحظة مهمة: تخزين محلي مؤقت (local disk) — قرار مؤقت لحد ما يتقرر حل نهائي
-// (Render نظام ملفات مؤقت، يعني هالملفات ممكن تنمسح عند إعادة تشغيل السيرفر).
-// لما يتقرر الحل النهائي (S3، أو خدمة تانية)، بس هالملف لازم يتغير — باقي الكود
-// (validators, controllers, services) ما إله علاقة بمكان التخزين، فمش رح يتأثر.
-
-const UPLOAD_DIR = path.join(__dirname, '../../../uploads/campaign-materials');
-
-// بننشئ المجلد تلقائيًا لو مش موجود
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-}
-
 // ============================================
-// 2.1.2 فحص نوع الملف (MIME type)
+// 2.1.2 Validate File Type (MIME type)
 // ============================================
 function validateFileType(file) {
   return MATERIAL_CONSTRAINTS.ALLOWED_MIME_TYPES.includes(file.mimetype);
 }
 
 // ============================================
-// 2.1.3 فحص حجم الملف
+// 2.1.3 Validate File Size
 // ============================================
 function validateFileSize(file) {
   const maxSizeBytes = MATERIAL_CONSTRAINTS.MAX_FILE_SIZE_MB * 1024 * 1024;
@@ -33,7 +21,7 @@ function validateFileSize(file) {
 }
 
 // ============================================
-// 2.1.4 فحص عدد الملفات
+// 2.1.4 Validate Files Count
 // ============================================
 function validateFilesCount(files) {
   if (!Array.isArray(files)) return false;
@@ -41,21 +29,19 @@ function validateFilesCount(files) {
 }
 
 // ============================================
-// 2.1.1 إعداد multer — diskStorage (تخزين محلي)
+// 2.1.1 Configure Multer with Cloudinary Storage
 // ============================================
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, UPLOAD_DIR);
-  },
-  filename: (req, file, cb) => {
-    // اسم فريد لكل ملف: UUID + timestamp + الامتداد الأصلي
-    const uniqueName = `${uuidv4()}-${Date.now()}`;
-    const ext = path.extname(file.originalname);
-    cb(null, `${uniqueName}${ext}`);
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: async (req, file) => {
+    return {
+      folder: 'campaign-materials',
+      resource_type: 'auto',
+      public_id: `${Date.now()}-${path.parse(file.originalname).name}`,
+    };
   },
 });
 
-// فلترة نوع الملف وقت الرفع مباشرة (قبل حتى ما يوصل للفحص اليدوي)
 const fileFilter = (req, file, cb) => {
   if (validateFileType(file)) {
     cb(null, true);
@@ -73,11 +59,6 @@ const multerUpload = multer({
   },
 });
 
-/**
- * middleware جاهز للاستخدام مباشرة بالـ routes — بيرفع لحقل اسمه "materials"،
- * وبيحول أخطاء multer (نوع غلط، حجم كبير، عدد كبير) لصيغة JSON موحدة بدل
- * ما يرميها كـ exception غير معالج.
- */
 const uploadMaterials = (req, res, next) => {
   const handler = multerUpload.array('materials', MATERIAL_CONSTRAINTS.MAX_FILES);
 
@@ -97,7 +78,6 @@ const uploadMaterials = (req, res, next) => {
       }
       return res.status(400).json({ success: false, message: err.message });
     } else if (err) {
-      // أخطاء fileFilter (نوع ملف غير مسموح)
       return res.status(400).json({ success: false, message: err.message });
     }
     next();
@@ -105,10 +85,8 @@ const uploadMaterials = (req, res, next) => {
 };
 
 // ============================================
-// 2.1.7 تحويل MIME type إلى MATERIAL_TYPE enum
+// 2.1.7 Determine MATERIAL_TYPE enum
 // ============================================
-// ⚠️ LOGO و TEXT مش قابلين للاستنتاج من الـ mimetype لحاله (بيعتمدوا على قصد
-// المستخدم وقت الرفع)، فهالدالة بترجع بس VIDEO / IMAGE / AUDIO / OTHER
 function determineFileType(mimeType) {
   if (mimeType.startsWith('video/')) return MATERIAL_TYPE.VIDEO;
   if (mimeType.startsWith('image/')) return MATERIAL_TYPE.IMAGE;
@@ -117,20 +95,12 @@ function determineFileType(mimeType) {
 }
 
 // ============================================
-// 2.1.5 "رفع" الملفات — تجهيز بياناتها لتنحفظ بالحملة
+// 2.1.5 Upload Files — Format metadata
 // ============================================
-// ⚠️ الملفات هون أصلاً محفوظة على القرص من قبل multer (diskStorage) لحظة
-// وصول الطلب — هالدالة بس بتحول شكل بيانات multer لشكل materialSchema بالظبط
-/**
- * @param {Array} files - مصفوفة ملفات جاية من multer (req.files، كل وحدة فيها .filename, .path, .size...)
- * @returns {Array} مصفوفة { fileName, fileUrl, fileType, fileSizeKb, mimeType }
- */
 function uploadFilesToStorage(files) {
   return files.map((file) => ({
     fileName: file.originalname,
-    // رابط نسبي — مبني على نفس مسار الـ static serving المستخدم أصلاً لصور البروفايل
-    // (app.use('/uploads', express.static(...))) بيغطي هالمجلد الفرعي تلقائيًا
-    fileUrl: `/uploads/campaign-materials/${file.filename}`,
+    fileUrl: file.path || file.secure_url,
     fileType: determineFileType(file.mimetype),
     fileSizeKb: Math.round(file.size / 1024),
     mimeType: file.mimetype,
@@ -138,11 +108,25 @@ function uploadFilesToStorage(files) {
 }
 
 // ============================================
-// 2.1.6 حذف ملفات (عند حذف الحملة)
+// Helper to extract Cloudinary public_id from URL
 // ============================================
-/**
- * @param {Array<string>} fileUrls - مصفوفة الروابط النسبية المخزنة بالحملة (fileUrl)
- */
+function getPublicIdFromUrl(url) {
+  try {
+    const parts = url.split('/');
+    const folderIndex = parts.indexOf('campaign-materials');
+    if (folderIndex === -1) return null;
+
+    // Extract folder + filename without file extension
+    const pathWithExt = parts.slice(folderIndex).join('/');
+    return pathWithExt.substring(0, pathWithExt.lastIndexOf('.'));
+  } catch (error) {
+    return null;
+  }
+}
+
+// ============================================
+// 2.1.6 Delete Files from Cloudinary
+// ============================================
 async function deleteFilesFromStorage(fileUrls) {
   if (!Array.isArray(fileUrls) || fileUrls.length === 0) {
     return;
@@ -150,16 +134,11 @@ async function deleteFilesFromStorage(fileUrls) {
 
   for (const url of fileUrls) {
     try {
-      // نحول الرابط النسبي لمسار فعلي بالقرص
-      // مثال: /uploads/campaign-materials/xxx.mp4 → UPLOAD_DIR/xxx.mp4
-      const fileName = path.basename(url);
-      const filePath = path.join(UPLOAD_DIR, fileName);
-
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
+      const publicId = getPublicIdFromUrl(url);
+      if (publicId) {
+        await cloudinary.uploader.destroy(publicId, { resource_type: 'auto' });
       }
     } catch (error) {
-      // نفس فلسفة activityLog.service — فشل حذف ملف واحد ما لازم يوقف حذف الباقي
       console.error(`[fileUpload.service] Failed to delete file ${url}: ${error.message}`);
     }
   }
