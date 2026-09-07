@@ -38,14 +38,18 @@ const ALLOWED_TRANSITIONS = {
 // ============================================
 // بس DRAFT — لأنو أي حملة دخلت مرحلة المراجعة (PENDING_REVIEW فما فوق) بيصير إلها
 // تاريخ فعلي (activity log, submissions...)، فما بينحذفوا نهائيًا، بس بينحطوا بالأرشيف.
-const DELETABLE_STATUSES = [CAMPAIGN_STATUS.DRAFT];
+const DELETABLE_STATUSES = [CAMPAIGN_STATUS.DRAFT ,CAMPAIGN_STATUS.REJECTED,];
 
 // ============================================
 // الحالات يلي فيها تتأرشف الحملة
 // ============================================
 // بس الحالات "النهائية" (Terminal) — يعني خلصت مسارها الطبيعي.
 // حملة ACTIVE ما بتنأرشف مباشرة (لازم توصل COMPLETED أو REJECTED أول).
-const ARCHIVABLE_STATUSES = [CAMPAIGN_STATUS.REJECTED, CAMPAIGN_STATUS.COMPLETED];
+const ARCHIVABLE_STATUSES = [
+  CAMPAIGN_STATUS.REJECTED,
+  CAMPAIGN_STATUS.COMPLETED, 
+  CAMPAIGN_STATUS.CANCELLED, 
+  CAMPAIGN_STATUS.EXPIRED];
 
 /**
  * بتتحقق هل الانتقال من حالة لحالة تانية مسموح حسب دورة حياة الحملة
