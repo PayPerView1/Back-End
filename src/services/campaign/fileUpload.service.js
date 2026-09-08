@@ -1,13 +1,8 @@
 // src/services/campaign/fileUpload.service.js
 const multer = require('multer');
 const path = require('path');
-<<<<<<< HEAD
-const fs = require('fs');
-const crypto = require('crypto');
-=======
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const cloudinary = require('../../config/cloudinary');
->>>>>>> origin/Develop
 const { MATERIAL_CONSTRAINTS, MATERIAL_TYPE } = require('../../constants/campaign.constants');
 
 // ============================================
