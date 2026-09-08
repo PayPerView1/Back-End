@@ -103,32 +103,12 @@ const draftUpdateRules = [
       return true;
     }),
 
-  // هون بالتحديث الجزئي، بس بنتحقق من نوع البيانات (كل حقل boolean لو موجود)
-  // مش لازم تكون كلها true (هاد فحص "الاكتمال" بيصير وقت الـ submit بس)
-  body('halalDeclaration')
+  // هون بس checkbox عام بسيط (halalDeclared: Boolean) — مش الـ 6 تفاصيل الدقيقة
+  // (هاي التفاصيل الكاملة بتنبعت لاحقًا وقت submit نفسه، مش أثناء التسويد العادي)
+  body('halalDeclared')
     .optional()
-    .isObject()
-    .withMessage('Halal declaration must be an object')
-    .custom((value) => {
-      const flags = [
-        'noGambling',
-        'noSexualContent',
-        'noExplicitMusic',
-        'noAlcohol',
-        'noSuspiciousCurrencies',
-        'noUnrealisticProfit',
-      ];
-
-      const invalidFlags = flags.filter(
-        (flag) => value[flag] !== undefined && typeof value[flag] !== 'boolean'
-      );
-
-      if (invalidFlags.length > 0) {
-        throw new Error(`These halal declaration fields must be boolean: ${invalidFlags.join(', ')}`);
-      }
-
-      return true;
-    }),
+    .isBoolean()
+    .withMessage('halalDeclared must be true or false'),
 ];
 
 // ============================================
@@ -138,6 +118,12 @@ const draftUpdateRules = [
  * ⚠️ هاي مش middleware بشكل express-validator عادي — هي middleware بسيط بيفحص
  * req.draft (يلي جاي أصلاً من verifyDraftOwnership) ويتأكد كل الحقول المطلوبة
  * موجودة وصحيحة (بنفس معايير إنشاء حملة كاملة)، وبيرجع قائمة بالحقول الناقصة تحديدًا.
+ *
+ * ⚠️ ملاحظة مهمة: المسودة (CampaignDraft) ما فيها إلا halalDeclared (boolean بسيط)،
+ * مش الـ 6 تفاصيل الدقيقة. لهيك، تفاصيل إعلان الحلال الكاملة لازم تنبعت بجسم
+ * طلب الـ submit نفسه (req.body.halalDeclaration)، ومنجمعها هون مع بيانات المسودة
+ * قبل ما نفحص الاكتمال. النتيجة المدموجة منحطها بـ req.finalCampaignData عشان
+ * الكونترولر/السيرفس يستخدمها مباشرة لإنشاء الحملة الفعلية بدون ما يعيد التجميع.
  */
 const validateDraftSubmission = (req, res, next) => {
   const draft = req.draft;
@@ -150,7 +136,13 @@ const validateDraftSubmission = (req, res, next) => {
     });
   }
 
-  const missingFields = getMissingCampaignFields(draft);
+  // بندمج بيانات المسودة مع تفاصيل الحلال الكاملة يلي المفروض توصل بجسم طلب الـ submit
+  const mergedData = {
+    ...draft.toObject(),
+    halalDeclaration: req.body.halalDeclaration,
+  };
+
+  const missingFields = getMissingCampaignFields(mergedData);
 
   if (missingFields.length > 0) {
     return res.status(400).json({
@@ -159,6 +151,9 @@ const validateDraftSubmission = (req, res, next) => {
       missingFields,
     });
   }
+
+  // منحط البيانات المدموجة والمفحوصة جاهزة، عشان submitDraft بالسيرفس يستخدمها مباشرة
+  req.finalCampaignData = mergedData;
 
   next();
 };
