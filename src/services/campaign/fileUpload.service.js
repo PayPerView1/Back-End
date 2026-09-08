@@ -2,7 +2,7 @@
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const { v4: uuidv4 } = require('uuid');
+const crypto = require('crypto');
 const { MATERIAL_CONSTRAINTS, MATERIAL_TYPE } = require('../../constants/campaign.constants');
 
 // ⚠️ ملاحظة مهمة: تخزين محلي مؤقت (local disk) — قرار مؤقت لحد ما يتقرر حل نهائي
@@ -48,8 +48,8 @@ const storage = multer.diskStorage({
     cb(null, UPLOAD_DIR);
   },
   filename: (req, file, cb) => {
-    // اسم فريد لكل ملف: UUID + timestamp + الامتداد الأصلي
-    const uniqueName = `${uuidv4()}-${Date.now()}`;
+    // اسم فريد لكل ملف: UUID (مدمج بـ Node عبر crypto) + timestamp + الامتداد الأصلي
+    const uniqueName = `${crypto.randomUUID()}-${Date.now()}`;
     const ext = path.extname(file.originalname);
     cb(null, `${uniqueName}${ext}`);
   },

@@ -245,14 +245,26 @@ campaignSchema.index({ name: 'text' }); // للبحث النصي
 // ----------------------
 // Validation: subCategories مطلوبة إذا كان contentType = MIXED
 // ----------------------
-campaignSchema.pre('validate', function (next) {
-  if (this.contentType === CONTENT_TYPE.MIXED && this.subCategories.length === 0) {
+// campaignSchema.pre('validate', function (next) {
+//   if (this.contentType === CONTENT_TYPE.MIXED && this.subCategories.length === 0) {
+//     this.invalidate(
+//       'subCategories',
+//       'At least one sub-category is required when content type is MIXED'
+//     );
+//   }
+//   next();
+// });
+
+campaignSchema.pre('validate', function () {
+  if (
+    this.contentType === CONTENT_TYPE.MIXED &&
+    this.subCategories.length === 0
+  ) {
     this.invalidate(
       'subCategories',
       'At least one sub-category is required when content type is MIXED'
     );
   }
-  next();
 });
 
 // ----------------------
