@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const passport = require('passport');
-
+const path = require('path');
 
 require('./config/passport');
 
@@ -29,17 +29,19 @@ app.use('/api/v1/profile', profileRoutes);
 
 
 
-const path = require('path');
+
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
-// const campaignCreationRoutes  = require('./routes/campaign/campaignCreation.routes');
-// const campaignDraftRoutes     = require('./routes/campaign/campaignDraft.routes');
+const chatRoutes = require('./routes/ai/chat.routes');
+app.use('/api/v1/chat', chatRoutes);
+
+
+
 const campaignManagementRoutes= require('./routes/campaign/campaignManagement.routes');
 const campaignCategoryRoutes  = require('./routes/campaign/campaignCategory.routes');
 
 
-// app.use('/api/campaigns', campaignCreationRoutes);
-// app.use('/api/campaigns', campaignDraftRoutes);
+
 app.use('/api/campaigns', campaignManagementRoutes);
 app.use('/api/categories', campaignCategoryRoutes);
 module.exports = app;

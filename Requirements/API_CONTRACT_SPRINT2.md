@@ -136,7 +136,7 @@
 #### Success Response `201`
 ```json
 {
-  "status": "success",
+  "success": "true",
   "message": "Campaign created and submitted for review",
   "data": {
     "campaign": {
@@ -159,7 +159,7 @@
 ```json
 // 400 — حقول مفقودة
 {
-  "status": "error",
+  "success": "false",
   "message": "Validation failed",
   "errors": [
     { "field": "name", "message": "Campaign name is required" },
@@ -169,25 +169,25 @@
 
 // 400 — MIXED بدون subCategories
 {
-  "status": "error",
+  "success": "false",
   "message": "At least one sub-category is required when content type is MIXED"
 }
 
 // 400 — الحلال غير مكتمل
 {
-  "status": "error",
+  "success": "false",
   "message": "All Halal declaration fields must be confirmed before submission"
 }
 
 // 400 — تجاوز عدد الملفات
 {
-  "status": "error",
+  "success": "false",
   "message": "Cannot upload more than 10 files per campaign"
 }
 
 // 403 — ليس BRAND
 {
-  "status": "error",
+  "success": "false",
   "message": "Access denied. Only brands can create campaigns"
 }
 ```
@@ -213,7 +213,7 @@
 #### Success Response `200`
 ```json
 {
-  "status": "success",
+  "success": "true",
   "data": {
     "campaignId": "64f1a2b3c4d5e6f7a8b9c0d1",
     "campaignName": "حملة رمضان 2026",
@@ -232,13 +232,13 @@
 ```json
 // 404
 {
-  "status": "error",
+  "success": "false",
   "message": "Campaign not found"
 }
 
 // 403
 {
-  "status": "error",
+  "success": "false",
   "message": "Access denied. You do not own this campaign"
 }
 ```
@@ -290,7 +290,7 @@
 #### Success Response `201`
 ```json
 {
-  "status": "success",
+  "success": "true",
   "message": "Draft saved successfully",
   "data": {
     "draft": {
@@ -309,7 +309,7 @@
 ```json
 // 400
 {
-  "status": "error",
+  "success": "false",
   "message": "Campaign name is required to save draft"
 }
 ```
@@ -335,7 +335,7 @@
 #### Success Response `200`
 ```json
 {
-  "status": "success",
+  "success": "true",
   "data": {
     "draft": {
       "_id": "64f1a2b3c4d5e6f7a8b9c0d2",
@@ -369,10 +369,10 @@
 #### Error Responses
 ```json
 // 404
-{ "status": "error", "message": "Draft not found" }
+{ "success": "false", "message": "Draft not found" }
 
 // 403
-{ "status": "error", "message": "Access denied. You do not own this draft" }
+{ "success": "false", "message": "Access denied. You do not own this draft" }
 ```
 
 ---
@@ -410,7 +410,7 @@
 #### Success Response `200`
 ```json
 {
-  "status": "success",
+  "success": "true",
   "message": "Draft updated successfully",
   "data": {
     "draft": {
@@ -428,12 +428,12 @@
 ```json
 // 400 — منتهية الصلاحية
 {
-  "status": "error",
+  "success": "false",
   "message": "This draft has expired and cannot be edited"
 }
 
 // 404
-{ "status": "error", "message": "Draft not found" }
+{ "success": "false", "message": "Draft not found" }
 ```
 
 ---
@@ -457,7 +457,7 @@
 #### Success Response `200`
 ```json
 {
-  "status": "success",
+  "success": "true",
   "message": "Draft deleted successfully"
 }
 ```
@@ -465,10 +465,10 @@
 #### Error Responses
 ```json
 // 404
-{ "status": "error", "message": "Draft not found" }
+{ "success": "false", "message": "Draft not found" }
 
 // 403
-{ "status": "error", "message": "Access denied. You do not own this draft" }
+{ "success": "false", "message": "Access denied. You do not own this draft" }
 ```
 
 ---
@@ -502,7 +502,7 @@
 #### Success Response `200`
 ```json
 {
-  "status": "success",
+  "success": "true",
   "message": "Draft auto-saved",
   "data": {
     "version": 3,
@@ -515,7 +515,7 @@
 ```json
 // 409 — version conflict
 {
-  "status": "error",
+  "success": "false",
   "message": "Draft version conflict. Please refresh and try again",
   "data": {
     "currentVersion": 4,
@@ -553,7 +553,7 @@
 #### Success Response `201`
 ```json
 {
-  "status": "success",
+  "success": "true",
   "message": "Draft submitted as campaign successfully",
   "data": {
     "campaign": {
@@ -573,7 +573,7 @@
 ```json
 // 400 — حقول مفقودة
 {
-  "status": "error",
+  "success": "false",
   "message": "Cannot submit incomplete draft",
   "errors": [
     { "field": "targetCountries", "message": "At least one target country is required" },
@@ -583,7 +583,7 @@
 
 // 400 — منتهية الصلاحية
 {
-  "status": "error",
+  "success": "false",
   "message": "This draft has expired and cannot be submitted"
 }
 ```
@@ -632,7 +632,7 @@ GET /api/v1/campaigns?status=ACTIVE&category=CLIPPING&page=1&limit=20&sortBy=cre
 #### Success Response `200`
 ```json
 {
-  "status": "success",
+  "success": "true",
   "data": {
     "campaigns": [
       {
@@ -703,7 +703,7 @@ GET /api/v1/campaigns?status=ACTIVE&category=CLIPPING&page=1&limit=20&sortBy=cre
 #### Success Response `200`
 ```json
 {
-  "status": "success",
+  "success": "true",
   "data": {
     "campaign": {
       "_id": "64f1a2b3c4d5e6f7a8b9c0d1",
@@ -798,10 +798,10 @@ GET /api/v1/campaigns?status=ACTIVE&category=CLIPPING&page=1&limit=20&sortBy=cre
 #### Error Responses
 ```json
 // 404
-{ "status": "error", "message": "Campaign not found" }
+{ "success": "false", "message": "Campaign not found" }
 
 // 403
-{ "status": "error", "message": "Access denied. You do not own this campaign" }
+{ "success": "false", "message": "Access denied. You do not own this campaign" }
 ```
 
 ---
@@ -835,7 +835,7 @@ GET /api/v1/campaigns?status=ACTIVE&category=CLIPPING&page=1&limit=20&sortBy=cre
 #### Success Response `201`
 ```json
 {
-  "status": "success",
+  "success": "true",
   "message": "Campaign copied successfully",
   "data": {
     "draft": {
@@ -874,7 +874,7 @@ GET /api/v1/campaigns?status=ACTIVE&category=CLIPPING&page=1&limit=20&sortBy=cre
 #### Success Response `200`
 ```json
 {
-  "status": "success",
+  "success": "true",
   "message": "Campaign archived successfully",
   "data": {
     "campaignId": "64f1a2b3c4d5e6f7a8b9c0d1",
@@ -888,7 +888,7 @@ GET /api/v1/campaigns?status=ACTIVE&category=CLIPPING&page=1&limit=20&sortBy=cre
 ```json
 // 400
 {
-  "status": "error",
+  "success": "false",
   "message": "Active campaigns cannot be archived. Please cancel the campaign first"
 }
 ```
@@ -915,7 +915,7 @@ GET /api/v1/campaigns?status=ACTIVE&category=CLIPPING&page=1&limit=20&sortBy=cre
 #### Success Response `200`
 ```json
 {
-  "status": "success",
+  "success": "true",
   "message": "Campaign restored successfully",
   "data": {
     "campaignId": "64f1a2b3c4d5e6f7a8b9c0d1",
@@ -948,7 +948,7 @@ GET /api/v1/campaigns?status=ACTIVE&category=CLIPPING&page=1&limit=20&sortBy=cre
 #### Success Response `200`
 ```json
 {
-  "status": "success",
+  "success": "true",
   "message": "Campaign deleted successfully"
 }
 ```
@@ -957,7 +957,7 @@ GET /api/v1/campaigns?status=ACTIVE&category=CLIPPING&page=1&limit=20&sortBy=cre
 ```json
 // 400
 {
-  "status": "error",
+  "success": "false",
   "message": "Only DRAFT or REJECTED campaigns can be deleted"
 }
 ```
@@ -992,7 +992,7 @@ GET /api/v1/campaigns?status=ACTIVE&category=CLIPPING&page=1&limit=20&sortBy=cre
 #### Success Response `200`
 ```json
 {
-  "status": "success",
+  "success": "true",
   "message": "Bulk delete completed",
   "data": {
     "deleted": 2,
@@ -1032,7 +1032,7 @@ GET /api/v1/campaigns?status=ACTIVE&category=CLIPPING&page=1&limit=20&sortBy=cre
 #### Success Response `200`
 ```json
 {
-  "status": "success",
+  "success": "true",
   "message": "Bulk archive completed",
   "data": {
     "archived": 2,
@@ -1087,7 +1087,7 @@ Content-Disposition: attachment; filename="campaign-64f1a2b3-export.csv"
 #### Success Response `200`
 ```json
 {
-  "status": "success",
+  "success": "true",
   "data": {
     "statistics": {
       "totalCampaigns": 98,
@@ -1135,7 +1135,7 @@ Content-Disposition: attachment; filename="campaign-64f1a2b3-export.csv"
 #### Success Response `200`
 ```json
 {
-  "status": "success",
+  "success": "true",
   "data": {
     "categories": [
       {
@@ -1204,7 +1204,7 @@ Content-Disposition: attachment; filename="campaign-64f1a2b3-export.csv"
 #### Success Response `200`
 ```json
 {
-  "status": "success",
+  "success": "true",
   "data": {
     "subCategories": ["CLIPPING", "UGC", "SLIDESHOW", "AUDIO", "LOGO"]
   }
