@@ -26,7 +26,7 @@ app.get('/', (req, res) => {
 });
 
 // ربط المسارات
-app.use('/api/auth', authRoutes);
+app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/profile', profileRoutes);
 
 // ⚠️ ملاحظة مهمة: /drafts لازم تترط قبل /campaigns العامة (نفس مبدأ "الروابط
@@ -34,8 +34,7 @@ app.use('/api/v1/profile', profileRoutes);
 // campaignManagement.routes تبع الشخص الثاني) ما تتعارض أو تسبق مسارات /drafts
 app.use('/api/v1/campaigns/drafts', campaignDraftRoutes);
 app.use('/api/v1/campaigns', campaignCreationRoutes);
-app.use('/api/v1/chat', chatRoutes);
-app.use('/api/campaigns', campaignManagementRoutes);
-app.use('/api/categories', campaignCategoryRoutes);
+app.use('/api/v1/campaigns', campaignManagementRoutes);
+app.use('/api/v1/categories', campaignCategoryRoutes);
 app.use('/api/v1/chat', chatRoutes);
 module.exports = app;

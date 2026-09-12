@@ -16,13 +16,13 @@ exports.createThread = async (req, res) => {
     const aiThreadId = aiResponse.data?.threadId || aiResponse.threadId;
     
     if (!aiThreadId) {
-      throw new Error('لم يتم استلام threadId من خدمة الـ AI');
+      throw new Error('The thread ID was not returned from the AI service');
     }
 
     // الخطوة 2: حفظ thread في قاعدة البيانات الخاصة بك
     const newThread = await ChatThread.create({
       user_id: userId,
-      title: title || 'محادثة جديدة',
+      title: title || 'New thread',
       ai_thread_id: aiThreadId,
     });
 
@@ -39,7 +39,7 @@ exports.createThread = async (req, res) => {
     console.error('❌ Error creating thread:', error.message);
     res.status(500).json({ 
       success: false, 
-      message: 'فشل في إنشاء المحادثة' 
+      message: 'failed to create thread, please try again'
     });
   }
 };
@@ -64,7 +64,7 @@ exports.listThreads = async (req, res) => {
         id: thread._id,
         title: thread.title,
         updatedAt: thread.updated_at,
-        lastMessage: lastMessage?.content || 'بداية محادثة جديدة',
+        lastMessage: lastMessage?.content || 'New conversation',
       };
     }));
 
@@ -76,7 +76,7 @@ exports.listThreads = async (req, res) => {
     console.error('❌ Error listing threads:', error.message);
     res.status(500).json({ 
       success: false, 
-      message: 'فشل في جلب المحادثات' 
+      message: 'failed to list threads, please try again' 
     });
   }
 };
@@ -92,7 +92,7 @@ exports.getMessages = async (req, res) => {
     if (!thread) {
       return res.status(403).json({ 
         success: false, 
-        message: 'غير مصرح لك بالوصول إلى هذه المحادثة' 
+        message: 'you are not authorized to access this thread' 
       });
     }
 
@@ -109,7 +109,7 @@ exports.getMessages = async (req, res) => {
     console.error('❌ Error getting messages:', error.message);
     res.status(500).json({ 
       success: false, 
-      message: 'فشل في جلب الرسائل' 
+      message: 'failed to get messages, please try again' 
     });
   }
 };
@@ -124,7 +124,7 @@ exports.sendMessage = async (req, res) => {
     if (!content || content.trim() === '') {
       return res.status(400).json({
         success: false,
-        message: 'الرجاء إدخال نص الرسالة'
+        message: 'please enter a message'
       });
     }
 
@@ -133,7 +133,7 @@ exports.sendMessage = async (req, res) => {
     if (!thread) {
       return res.status(403).json({
         success: false,
-        message: 'غير مصرح لك بالوصول إلى هذه المحادثة'
+        message: 'you are not authorized to send messages in this thread'
       });
     }
 
@@ -154,7 +154,7 @@ exports.sendMessage = async (req, res) => {
     // استخراج محتوى الرد من استجابة الـ AI
     const assistantContent = aiResponse.data?.message?.content || 
                            aiResponse.message?.content || 
-                           'عذراً، لم أتمكن من معالجة طلبك';
+                           'Sorry, I couldn\'t process your request';
 
     // 4. حفظ رد الـ AI في قاعدة البيانات
     const assistantMessage = await ChatMessage.create({
@@ -182,7 +182,7 @@ exports.sendMessage = async (req, res) => {
     console.error('❌ Error sending message:', error.message);
     res.status(500).json({
       success: false,
-      message: 'فشل في إرسال الرسالة. يرجى المحاولة مرة أخرى'
+      message: 'failed to send message, please try again'
     });
   }
 };
@@ -198,7 +198,7 @@ exports.deleteThread = async (req, res) => {
     if (!thread) {
       return res.status(403).json({
         success: false,
-        message: 'غير مصرح لك بحذف هذه المحادثة'
+        message: 'you are not authorized to delete this thread'
       });
     }
 
@@ -212,13 +212,13 @@ exports.deleteThread = async (req, res) => {
 
     res.json({ 
       success: true, 
-      message: 'تم حذف المحادثة بنجاح' 
+      message: 'thread deleted successfully' 
     });
   } catch (error) {
     console.error('❌ Error deleting thread:', error.message);
     res.status(500).json({
       success: false,
-      message: 'فشل في حذف المحادثة'
+      message: 'failed to delete the thread. Please try again.'
     });
   }
 };

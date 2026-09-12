@@ -154,7 +154,7 @@ async function processAIReviewResult(campaign, aiResult) {
       $set: updateData,
     },
     {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }
   );
@@ -215,7 +215,7 @@ async function submitCampaignForReview(campaign) {
       },
     },
     {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }
   );

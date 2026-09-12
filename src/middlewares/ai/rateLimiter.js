@@ -1,5 +1,5 @@
 // src/middlewares/ai/rateLimiter.js
-const rateLimit = require('express-rate-limit');
+const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 
 /**
  * Middleware لتحديد عدد الطلبات المسموحة
@@ -25,8 +25,11 @@ const rateLimiter = (options = {}) => {
     standardHeaders: true, // إرجاع معلومات الـ Rate Limit في الـ Headers
     legacyHeaders: false,
     keyGenerator: (req) => {
-      // استخدام معرف المستخدم إذا كان موجوداً، وإلا استخدام الـ IP
-      return req.user?._id?.toString() || req.ip;
+      // استخدام معرف المستخدم إذا كان موجوداً، وإلا المعالجة الآمنة لـ IP (تتدعم IPv6)
+      if (req.user && req.user._id) {
+        return req.user._id.toString();
+      }
+      return ipKeyGenerator(req);
     },
     handler: (req, res) => {
       res.status(429).json({

@@ -8,7 +8,7 @@ class AIChatbotClient {
     this.client = axios.create({
       baseURL: AI_SERVICE_URL,
       headers: { 'Content-Type': 'application/json' },
-      timeout: 30000, // 30 ثانية مهلة
+      timeout: 80000, // 80 ثانية مهلة
     });
   }
 
@@ -31,7 +31,7 @@ class AIChatbotClient {
     return this.callWithRetry(async () => {
       const response = await this.client.post('/api/v1/ai/threads', 
         { title: title || '' },
-        { headers: { Authorization: ` ${userToken}` } }
+        { headers: { Authorization: `${userToken}` } }
       );
       return response.data;
     });
@@ -41,7 +41,7 @@ class AIChatbotClient {
   async listAiThreads(userToken) {
     return this.callWithRetry(async () => {
       const response = await this.client.get('/api/v1/ai/threads', {
-        headers: { Authorization: ` ${userToken}` }
+        headers: { Authorization: `${userToken}` }
       });
       return response.data;
     });
@@ -51,7 +51,7 @@ class AIChatbotClient {
   async getAiMessages(userToken, threadId) {
     return this.callWithRetry(async () => {
       const response = await this.client.get(`/api/v1/ai/threads/${threadId}/messages`, {
-        headers: { Authorization: ` ${userToken}` }
+        headers: { Authorization: `${userToken}` }
       });
       return response.data;
     });
@@ -62,7 +62,7 @@ class AIChatbotClient {
     return this.callWithRetry(async () => {
       const response = await this.client.post(`/api/v1/ai/threads/${threadId}/messages`, 
         { content },
-        { headers: { Authorization: ` ${userToken}` } }
+        { headers: { Authorization: `${userToken}` } }
       );
       return response.data;
     });
@@ -72,7 +72,7 @@ class AIChatbotClient {
   async deleteAiThread(userToken, threadId) {
     return this.callWithRetry(async () => {
       await this.client.delete(`/api/v1/ai/threads/${threadId}`, {
-        headers: { Authorization: ` ${userToken}` }
+        headers: { Authorization: `${userToken}` }
       });
     });
   }
