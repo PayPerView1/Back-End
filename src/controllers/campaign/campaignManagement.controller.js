@@ -18,7 +18,7 @@ const getCampaigns = async (req, res) => {
       await campaignManagementService.getCampaigns(advertiserId, req.query);
 
     return res.status(200).json({
-      status: 'success',
+      success: 'true',
       data: {
         campaigns,
         pagination,
@@ -27,7 +27,7 @@ const getCampaigns = async (req, res) => {
     });
   } catch (error) {
     return res.status(error.statusCode || 500).json({
-      status: 'error',
+      success: 'false',
       message: error.message || 'Internal server error',
     });
   }
@@ -44,7 +44,7 @@ const getCampaignById = async (req, res) => {
       await campaignManagementService.getCampaignById(req.campaign);
 
     return res.status(200).json({
-      status: 'success',
+      success: 'true',
       data: {
         campaign: {
           ...campaign,
@@ -54,7 +54,7 @@ const getCampaignById = async (req, res) => {
     });
   } catch (error) {
     return res.status(error.statusCode || 500).json({
-      status: 'error',
+      success: 'false',
       message: error.message || 'Internal server error',
     });
   }
@@ -73,14 +73,14 @@ const getCampaignStatistics = async (req, res) => {
       await campaignManagementService.getCampaignStatistics(advertiserId);
 
     return res.status(200).json({
-      status: 'success',
+      success: 'true',
       data: {
         statistics,
       },
     });
   } catch (error) {
     return res.status(error.statusCode || 500).json({
-      status: 'error',
+      success: 'false',
       message: error.message || 'Internal server error',
     });
   }
@@ -107,7 +107,7 @@ const copyCampaign = async (req, res) => {
     );
 
     return res.status(201).json({
-      status: 'success',
+      success: 'true',
       message: 'Campaign copied successfully',
       data: {
         draft,
@@ -115,7 +115,7 @@ const copyCampaign = async (req, res) => {
     });
   } catch (error) {
     return res.status(error.statusCode || 500).json({
-      status: 'error',
+      success: 'false',
       message: error.message || 'Internal server error',
     });
   }
@@ -136,13 +136,13 @@ const archiveCampaign = async (req, res) => {
     );
 
     return res.status(200).json({
-      status: 'success',
+      success: 'true',
       message: 'Campaign archived successfully',
       data: result,
     });
   } catch (error) {
     return res.status(error.statusCode || 500).json({
-      status: 'error',
+      success: 'false',
       message: error.message || 'Internal server error',
     });
   }
@@ -163,13 +163,13 @@ const restoreCampaign = async (req, res) => {
     );
 
     return res.status(200).json({
-      status: 'success',
+      success: 'true',
       message: 'Campaign restored successfully',
       data: result,
     });
   } catch (error) {
     return res.status(error.statusCode || 500).json({
-      status: 'error',
+      success: 'false',
       message: error.message || 'Internal server error',
     });
   }
@@ -187,12 +187,12 @@ const deleteCampaign = async (req, res) => {
     await campaignManagementService.deleteCampaign(campaignId, advertiserId);
 
     return res.status(200).json({
-      status: 'success',
+      success: 'true',
       message: 'Campaign deleted successfully',
     });
   } catch (error) {
     return res.status(error.statusCode || 500).json({
-      status: 'error',
+      success: 'false',
       message: error.message || 'Internal server error',
     });
   }
@@ -217,13 +217,13 @@ const bulkDelete = async (req, res) => {
     );
 
     return res.status(200).json({
-      status: 'success',
+      success: 'true',
       message: 'Bulk delete completed',
       data: result,
     });
   } catch (error) {
     return res.status(error.statusCode || 500).json({
-      status: 'error',
+      success: 'false',
       message: error.message || 'Internal server error',
     });
   }
@@ -244,13 +244,13 @@ const bulkArchive = async (req, res) => {
     );
 
     return res.status(200).json({
-      status: 'success',
+      success: 'true',
       message: 'Bulk archive completed',
       data: result,
     });
   } catch (error) {
     return res.status(error.statusCode || 500).json({
-      status: 'error',
+      success: 'false',
       message: error.message || 'Internal server error',
     });
   }
@@ -279,7 +279,7 @@ const exportCampaignToCSV = async (req, res) => {
     return res.status(200).send(csvContent);
   } catch (error) {
     return res.status(error.statusCode || 500).json({
-      status: 'error',
+      success: 'false',
       message: error.message || 'Internal server error',
     });
   }
