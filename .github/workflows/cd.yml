@@ -1,0 +1,15 @@
+name: CD Workflow
+
+on:
+  push:
+    branches: [ main ] # Triggers production deployment when Develop is merged into main
+
+jobs:
+  deploy:
+    name: Deploy to Render (Production)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger Render Deploy Hook
+        run: |
+          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"

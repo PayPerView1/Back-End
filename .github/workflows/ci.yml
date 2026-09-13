@@ -1,0 +1,35 @@
+name: CI Workflow
+
+on:
+  push:
+    branches: [ main, Develop ]
+  pull_request:
+    branches: [ main, Develop ]
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [22.x, 24.x]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Jest tests
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET || 'ci_test_jwt_secret_key_12345' }}
+          NODE_ENV: test
+        run: npm test
