@@ -39,6 +39,23 @@ const getDraft = async (req, res) => {
 };
 
 // ============================================
+// GET /api/v1/campaigns/drafts
+// ============================================
+const getAllDrafts = async (req, res) => {
+  try {
+    const drafts = await draftService.getAllDrafts(req.user._id);
+
+    res.status(200).json({
+      success: true,
+      count: drafts.length,
+      drafts,
+    });
+  } catch (error) {
+    console.error('[campaignDraft.controller] getAllDrafts error:', error);
+    res.status(500).json({ success: false, message: 'Server error while fetching drafts' });
+  }
+};
+// ============================================
 // 6.2.3 — PUT /api/v1/campaigns/drafts/:draftId
 // ============================================
 const updateDraft = async (req, res) => {
@@ -133,6 +150,7 @@ const submitDraft = async (req, res) => {
 module.exports = {
   createDraft,
   getDraft,
+  getAllDrafts,
   updateDraft,
   deleteDraft,
   autoSaveDraft,

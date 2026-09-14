@@ -8,7 +8,7 @@ class AIChatbotClient {
     this.client = axios.create({
       baseURL: AI_SERVICE_URL,
       headers: { 'Content-Type': 'application/json' },
-      timeout: 80000, // 80 ثانية مهلة
+      timeout: 100000, // 100 ثانية مهلة
     });
   }
 

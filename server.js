@@ -8,6 +8,7 @@ if (!process.env.JWT_SECRET) {
 
 const app = require('./src/app');
 const connectDB = require('./src/config/db.js');
+const startCampaignExpiryJob = require('./src/jobs/campaignExpiry.job');
 const startDraftExpiryJob = require('./src/jobs/draftExpiry.job');
 
 // الاتصال بقاعدة البيانات
@@ -19,5 +20,6 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 
   // تشغيل الـ cron jobs بعد ما السيرفر يبلش يشتغل فعليًا
+  startCampaignExpiryJob();
   startDraftExpiryJob();
 });
