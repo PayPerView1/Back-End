@@ -7,7 +7,7 @@ const {
 const { logActivity } = require('./activityLog.service');
 
 // مهلة انتظار الطلب لخدمة الـ AI (بالميلي ثانية) قبل ما نعتبره فشل
-const AI_SERVICE_TIMEOUT_MS = 80000; // 80 ثواني
+const AI_SERVICE_TIMEOUT_MS = 100000; // 100 ثواني
 
 // ============================================
 // 4.1.2 — تجهيز البيانات المرسلة لخدمة الـ AI

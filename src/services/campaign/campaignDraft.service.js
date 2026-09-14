@@ -28,6 +28,18 @@ async function createDraft(advertiserId, draftData) {
   return draft;
 }
 
+
+// ============================================
+// 6.1.7 — جلب كل المسودات الخاصة بالمعلن
+// ============================================
+/**
+ * @param {string|ObjectId} advertiserId
+ * @returns {Promise<Array>} قائمة بالمسودات مرتبة من الأحدث للأقدم
+ */
+async function getAllDrafts(advertiserId) {
+  return await CampaignDraft.find({ advertiserId }).sort({ createdAt: -1 });
+}
+
 // ============================================
 // 6.1.2 — جلب مسودة بالتفصيل
 // ============================================
@@ -261,6 +273,7 @@ async function expireDrafts() {
 module.exports = {
   createDraft,
   getDraftById,
+  getAllDrafts,
   updateDraft,
   autoSaveDraft,
   deleteDraft,

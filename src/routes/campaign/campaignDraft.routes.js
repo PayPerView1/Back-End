@@ -5,6 +5,7 @@ const router = express.Router();
 const {
   createDraft,
   getDraft,
+  getAllDrafts,
   updateDraft,
   deleteDraft,
   autoSaveDraft,
@@ -31,6 +32,10 @@ router.post('/', authMiddleware, requireBrandRole, draftCreationRules, validate,
 // @route   GET /api/v1/campaigns/drafts/:draftId
 // @desc    جلب مسودة بالتفصيل
 router.get('/:draftId', authMiddleware, verifyDraftOwnership, getDraft);
+
+// @route   GET /api/v1/campaigns/drafts
+// @desc    جلب كل المسودات الخاصة بالمعلن
+router.get('/', authMiddleware, requireBrandRole, getAllDrafts);
 
 // @route   PUT /api/v1/campaigns/drafts/:draftId
 // @desc    تحديث مسودة (كل الحقول اختيارية)

@@ -73,7 +73,8 @@ async function createCampaign(
       brief: campaignData.brief,
       targetCountries: campaignData.targetCountries,
       materials: uploadedMaterials,
-
+      startDate: campaignData.startDate || null,
+      endDate: campaignData.endDate || null,
       halalDeclaration: {
         ...campaignData.halalDeclaration,
         declaredBy: advertiserId,

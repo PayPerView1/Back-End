@@ -168,6 +168,23 @@ const campaignCreationRules = [
 
       return true;
     }),
+      body('startDate')
+    .optional()
+    .isISO8601()
+    .withMessage('Start date must be a valid date')
+    .toDate(),
+
+  body('endDate')
+    .optional()
+    .isISO8601()
+    .withMessage('End date must be a valid date')
+    .toDate()
+    .custom((value, { req }) => {
+      if (req.body.startDate && new Date(value) <= new Date(req.body.startDate)) {
+        throw new Error('End date must be after start date');
+      }
+      return true;
+    }),
 
   body('halalDeclaration').custom((value) => {
     const { valid, missingFields } = validateHalalDeclaration(value);

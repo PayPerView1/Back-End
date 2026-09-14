@@ -228,6 +228,8 @@ const campaignSchema = new mongoose.Schema(
     submittedAt:  { type: Date, default: null },
     activatedAt:  { type: Date, default: null },
     completedAt:  { type: Date, default: null },
+    startDate:    {type: Date,default: null,},
+    endDate:      {type: Date,default: null,},
   },
   {
     timestamps: true, // يضيف createdAt و updatedAt تلقائياً
@@ -263,6 +265,19 @@ campaignSchema.pre('validate', function () {
     this.invalidate(
       'subCategories',
       'At least one sub-category is required when content type is MIXED'
+    );
+  }
+});
+// Add this pre-save validation
+campaignSchema.pre('validate', function () {
+  if (
+    this.startDate &&
+    this.endDate &&
+    this.endDate <= this.startDate
+  ) {
+    this.invalidate(
+      'endDate',
+      'End date must be after start date'
     );
   }
 });
