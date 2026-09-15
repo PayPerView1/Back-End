@@ -209,7 +209,7 @@ const getCampaignById = async (campaign) => {
  * @throws {Error} 404 إذا لم تُوجد الحملة
  */
 const copyCampaign = async (campaignId, advertiserId, options = {}) => {
-  const { newName, includeMaterials, includeTargetAudience = true } = options;
+  const { newName, includeMaterials = true, includeTargetAudience = true } = options;
 
   // ── جلب الحملة الأصلية ──────────────────────────────────────
   const original = await Campaign.findOne({ _id: campaignId, advertiserId });
