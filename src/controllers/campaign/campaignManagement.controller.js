@@ -86,6 +86,25 @@ const getCampaignStatistics = async (req, res) => {
   }
 };
 
+/**
+ * Handles GET /api/v1/campaigns/:campaignId/statistics
+ */
+const getCampaignStatisticsById = async (req, res) => {
+  try {
+    const statistics =
+      await campaignManagementService.getCampaignStatisticsById(req.campaign);
+
+    return res.status(200).json({
+      success: 'true',
+      data: statistics,
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      success: 'false',
+      message: error.message || 'Internal server error',
+    });
+  }
+};
 // ─────────────────────────────────────────────
 // Step 3: Single Campaign Action Controllers
 // ─────────────────────────────────────────────
@@ -98,12 +117,12 @@ const copyCampaign = async (req, res) => {
   try {
     const advertiserId = req.user._id;
     const { campaignId } = req.params;
-    const { newName, includeMaterials } = req.body;
+    const { newName, includeMaterials, includeTargetAudience } = req.body;
 
     const draft = await campaignManagementService.copyCampaign(
       campaignId,
       advertiserId,
-      { newName, includeMaterials }
+      { newName, includeMaterials, includeTargetAudience }
     );
 
     return res.status(201).json({
@@ -289,6 +308,7 @@ module.exports = {
   getCampaigns,
   getCampaignById,
   getCampaignStatistics,
+  getCampaignStatisticsById,
   copyCampaign,
   archiveCampaign,
   restoreCampaign,

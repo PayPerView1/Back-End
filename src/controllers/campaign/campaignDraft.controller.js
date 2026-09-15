@@ -147,6 +147,24 @@ const submitDraft = async (req, res) => {
   }
 };
 
+const getExpiredDrafts = async (req, res) => {
+  try {
+    const drafts = await draftService.getExpiredDrafts(req.user._id);
+
+    res.status(200).json({
+      success: true,
+      count: drafts.length,
+      drafts,
+    });
+  } catch (error) {
+    console.error('[campaignDraft.controller] getExpiredDrafts error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching expired drafts',
+    });
+  }
+};
+
 module.exports = {
   createDraft,
   getDraft,
@@ -155,4 +173,5 @@ module.exports = {
   deleteDraft,
   autoSaveDraft,
   submitDraft,
+  getExpiredDrafts,
 };

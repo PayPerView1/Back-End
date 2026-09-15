@@ -10,6 +10,7 @@ const {
   deleteDraft,
   autoSaveDraft,
   submitDraft,
+  getExpiredDrafts
 } = require('../../controllers/campaign/campaignDraft.controller');
 
 const { protect: authMiddleware } = require('../../middlewares/authMiddleware');
@@ -28,6 +29,10 @@ const {
 // @route   POST /api/v1/campaigns/drafts
 // @desc    إنشاء مسودة جديدة (اسم بس مطلوب)
 router.post('/', authMiddleware, requireBrandRole, draftCreationRules, validate, createDraft);
+
+// @route   GET /api/v1/campaigns/drafts/expired
+// @desc    Fetch all expired drafts owned by the authenticated advertiser
+router.get('/expired', authMiddleware, requireBrandRole, getExpiredDrafts);
 
 // @route   GET /api/v1/campaigns/drafts/:draftId
 // @desc    جلب مسودة بالتفصيل

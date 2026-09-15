@@ -153,6 +153,12 @@ const validateCopyCampaign = [
     .isBoolean()
     .withMessage('includeMaterials must be true or false')
     .toBoolean(),
+
+  body('includeTargetAudience')
+    .optional()
+    .isBoolean()
+    .withMessage('includeTargetAudience must be true or false')
+    .toBoolean(),
 ];
 
 // ─────────────────────────────────────────────

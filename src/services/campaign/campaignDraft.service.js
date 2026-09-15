@@ -5,7 +5,7 @@ const sendEmail = require('../emailService');
 const { deleteFilesFromStorage } = require('./fileUpload.service');
 const { logActivity } = require('./activityLog.service');
 const { createCampaign, submitCampaignForReview } = require('./campaignCreation.service');
-const { CAMPAIGN_ACTION } = require('../../constants/campaign.constants');
+const { CAMPAIGN_ACTION, CAMPAIGN_STATUS } = require('../../constants/campaign.constants');
 
 // ============================================
 // 6.1.1 — إنشاء مسودة جديدة
@@ -270,6 +270,12 @@ async function expireDrafts() {
   return expiringDrafts.length;
 }
 
+async function getExpiredDrafts(advertiserId) {
+  return CampaignDraft.find({
+    advertiserId,
+    status: CAMPAIGN_STATUS.EXPIRED,
+  }).sort({ expiresAt: -1 });
+}
 module.exports = {
   createDraft,
   getDraftById,
@@ -277,6 +283,7 @@ module.exports = {
   updateDraft,
   autoSaveDraft,
   deleteDraft,
+  getExpiredDrafts,
   submitDraft,
   expireDrafts,
 };
