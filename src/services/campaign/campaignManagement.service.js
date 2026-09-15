@@ -6,6 +6,7 @@ const { deleteFilesFromStorage } = require('./fileUpload.service');
 const {
   CAMPAIGN_STATUS,
   CAMPAIGN_ACTION,
+  CONTENT_TYPE,
 } = require('../../constants/campaign.constants');
 const {
   buildPaginationOptions,
@@ -208,7 +209,7 @@ const getCampaignById = async (campaign) => {
  * @throws {Error} 404 إذا لم تُوجد الحملة
  */
 const copyCampaign = async (campaignId, advertiserId, options = {}) => {
-  const { newName, includeMaterials = true } = options;
+  const { newName, includeMaterials, includeTargetAudience = true } = options;
 
   // ── جلب الحملة الأصلية ──────────────────────────────────────
   const original = await Campaign.findOne({ _id: campaignId, advertiserId });
@@ -231,7 +232,6 @@ const copyCampaign = async (campaignId, advertiserId, options = {}) => {
     cpm:            original.cpm,
     dailyBudgetLimit: original.dailyBudgetLimit,
     brief:          original.brief,
-    targetCountries: original.targetCountries,
     copyInfo: { isCopy: true, copiedFromId: original._id },
     // إعلان الحلال — نرجع للـ false لأن المعلن يجب أن يُعلن من جديد
     halalDeclared:  false,
@@ -247,6 +247,9 @@ const copyCampaign = async (campaignId, advertiserId, options = {}) => {
         }))
       : [],
   };
+  if (includeTargetAudience) {
+  draftData.targetCountries = original.targetCountries;
+}
 
   const draft = await CampaignDraft.create(draftData);
 
@@ -675,7 +678,69 @@ const getCampaignStatistics = async (advertiserId) => {
     byCategory: categoryBreakdown,
   };
 };
+// ═══════════════════════════════════════════════════════════════
+// 11. getCampaignStatisticsById
+// إحصائيات حملة معينة للوحة تحكم المعلن
+// ═══════════════════════════════════════════════════════════════
 
+const getCampaignStatisticsById = (campaign) => {
+  const campaignData = campaign.toObject
+    ? campaign.toObject()
+    : campaign;
+
+  const isMixed = campaignData.contentType === CONTENT_TYPE.MIXED;
+
+  const rawCategories = isMixed
+    ? (Array.isArray(campaignData.subCategories)
+        ? campaignData.subCategories
+        : [])
+    : (campaignData.category ? [campaignData.category] : []);
+
+  const categoryCounts = rawCategories.reduce((counts, category) => {
+    if (!category) return counts;
+
+    counts[category] = (counts[category] || 0) + 1;
+    return counts;
+  }, {});
+
+  const categories = Object.keys(categoryCounts);
+  const totalSections = categories.reduce(
+    (total, category) => total + categoryCounts[category],
+    0
+  );
+
+  const totalBudget = Number(campaignData.totalBudget) || 0;
+  const totalSpent = Number(campaignData.stats?.totalSpent) || 0;
+
+  return {
+    campaignId: campaignData._id.toString(),
+    summary: {
+      totalCampaigns: 1,
+    },
+    categoryDistribution: categories.map((category) => ({
+      category,
+      count: categoryCounts[category],
+      percentage: totalSections
+        ? Number(
+            ((categoryCounts[category] / totalSections) * 100).toFixed(2)
+          )
+        : 0,
+    })),
+    categoriesStats: categories.map((category) => ({
+      category,
+      activeCampaignsCount: 1,
+      growthRate: 0,
+      totalSpent: isMixed ? 0 : totalSpent,
+      reach: 0,
+      ctr: 0,
+      roi: 0,
+      budgetUtilizationPercentage:
+        !isMixed && totalBudget > 0
+          ? Number(((totalSpent / totalBudget) * 100).toFixed(2))
+          : 0,
+    })),
+  };
+};
 // ═══════════════════════════════════════════════════════════════
 // Exports
 // ═══════════════════════════════════════════════════════════════
@@ -690,4 +755,5 @@ module.exports = {
   bulkArchiveCampaigns,
   exportCampaignToCSV,
   getCampaignStatistics,
+  getCampaignStatisticsById,
 };

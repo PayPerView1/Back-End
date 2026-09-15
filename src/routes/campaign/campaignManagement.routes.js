@@ -161,4 +161,13 @@ router.get(
   campaignManagementController.exportCampaignToCSV
 );
 
+router.get(
+  '/:campaignId/statistics',
+  validateCampaignId,
+  validate,
+  verifyCampaignOwnership,
+  campaignManagementController.getCampaignStatisticsById
+);
+
+
 module.exports = router;
