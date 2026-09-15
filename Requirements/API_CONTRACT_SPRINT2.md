@@ -818,7 +818,8 @@ GET /api/v1/campaigns?status=ACTIVE&category=CLIPPING&page=1&limit=20&sortBy=cre
 ```json
 {
   "newName": "حملة رمضان 2026 — نسخة",
-  "includeMaterials": true
+  "includeMaterials": true,
+  "includeTargetAudience": false
 }
 ```
 
