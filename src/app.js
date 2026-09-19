@@ -1,6 +1,9 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const passport = require('passport');
+
+require('./config/passport');
 
 const authRoutes = require('./routes/authRoutes');
 const profileRoutes = require('./routes/profileRoutes');
@@ -11,6 +14,7 @@ const campaignCategoryRoutes  = require('./routes/campaign/campaignCategory.rout
 const chatRoutes = require('./routes/ai/chat.routes');
 
 const app = express();
+app.use(passport.initialize());
 
 // Middlewares أساسية
 app.use(cors());

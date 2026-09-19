@@ -16,17 +16,40 @@ const { CAMPAIGN_ACTION, CAMPAIGN_STATUS } = require('../../constants/campaign.c
  * @returns {Promise<Object>}
  */
 async function createDraft(advertiserId, draftData) {
-  // expiresAt و version عندهم default بالـ schema نفسها (DRAFT_EXPIRY_DAYS و 1)
-  // فما محتاجين نحددهم يدويًا هون إلا لو بدنا نتجاوزهم بشكل صريح
   const draft = await CampaignDraft.create({
     advertiserId,
     name: draftData.name,
+    contentType: draftData.contentType || null,
+    category: draftData.category || null,
+    subCategories: draftData.subCategories || [],
+    totalBudget: draftData.totalBudget || null,
+    cpm: draftData.cpm || null,
+    dailyBudgetLimit: draftData.dailyBudgetLimit || null,
+    brief: draftData.brief || {},
+    targetCountries: draftData.targetCountries || [],
+    halalDeclared: draftData.halalDeclared || false,
+    copyInfo: draftData.copyInfo || {},
+    materials: draftData.materials || [],
+    startDate: draftData.startDate || null,
+    endDate: draftData.endDate || null,
   });
 
   await logActivity(draft._id, CAMPAIGN_ACTION.CREATED, advertiserId, { type: 'DRAFT' });
 
   return draft;
 }
+// async function createDraft(advertiserId, draftData) {
+//   // expiresAt و version عندهم default بالـ schema نفسها (DRAFT_EXPIRY_DAYS و 1)
+//   // فما محتاجين نحددهم يدويًا هون إلا لو بدنا نتجاوزهم بشكل صريح
+//   const draft = await CampaignDraft.create({
+//     advertiserId,
+//     name: draftData.name,
+//   });
+
+//   await logActivity(draft._id, CAMPAIGN_ACTION.CREATED, advertiserId, { type: 'DRAFT' });
+
+//   return draft;
+// }
 
 
 // ============================================

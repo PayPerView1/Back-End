@@ -73,7 +73,7 @@ async function reviewCampaign(campaign) {
 
   // ما فيه رابط خدمة أصلاً → وضع Mock تلقائي (Task 4.1.5)
   if (!aiServiceUrl) {
-    return getMockReviewResult();
+    throw new Error('AI_SERVICE_URL is not configured');
   }
 
   const payload = buildReviewPayload(campaign);
