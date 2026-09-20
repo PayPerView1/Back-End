@@ -95,6 +95,8 @@ const campaignDraftSchema = new mongoose.Schema(
       default: () => new Date(Date.now() + DRAFT_EXPIRY_DAYS * 24 * 60 * 60 * 1000),
       index: true,
     },
+    startDate: { type: Date, default: null },
+    endDate: { type: Date, default: null },
   },
   {
     timestamps: true,
