@@ -31,7 +31,8 @@ function validateHalalDeclaration(halalDeclaration) {
     return { valid: false, missingFields: requiredFlags };
   }
 
-  const missingFields = requiredFlags.filter((flag) => halalDeclaration[flag] !== true);
+  const missingFields = requiredFlags.filter((flag) => halalDeclaration[flag] !== true  && halalDeclaration[flag] !==
+"true");
 
   return { valid: missingFields.length === 0, missingFields };
 }
@@ -185,16 +186,46 @@ const campaignCreationRules = [
       }
       return true;
     }),
+body('halalDeclaration').custom((value, { req }) => {
+  let declaration = value;
 
-  body('halalDeclaration').custom((value) => {
-    const { valid, missingFields } = validateHalalDeclaration(value);
-
-    if (!valid) {
-      throw new Error(`Halal declaration incomplete or not accepted: ${missingFields.join(', ')}`);
+  if (typeof value === 'string') {
+    try {
+      declaration = JSON.parse(value);
+    } catch {
+      throw new Error('Halal declaration must be valid JSON');
     }
+  }
 
-    return true;
-  }),
+  if (
+    !declaration ||
+    typeof declaration !== 'object' ||
+    Array.isArray(declaration)
+  ) {
+    throw new Error('Halal declaration must be a JSON object');
+  }
+
+  // Required so campaignCreation.service receives an object, not a string.
+  req.body.halalDeclaration = declaration;
+
+  const { valid, missingFields } = validateHalalDeclaration(declaration);
+  if (!valid) {
+    throw new Error(
+      `Halal declaration incomplete or not accepted: ${missingFields.join(', ')}`
+    );
+  }
+
+  return true;
+}),
+  // body('halalDeclaration').custom((value) => {
+  //   const { valid, missingFields } = validateHalalDeclaration(value);
+
+  //   if (!valid) {
+  //     throw new Error(`Halal declaration incomplete or not accepted: ${missingFields.join(', ')}`);
+  //   }
+
+  //   return true;
+  // }),
 ];
 
 // middleware بيفحص نتيجة القواعد فوق ويرجع الأخطاء لو في
