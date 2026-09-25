@@ -156,7 +156,7 @@ const processPaypalWebhook = async (headers, rawBody) => {
     // تحديث رصيد المحفظة
     await Wallet.findByIdAndUpdate(
       transaction.walletId._id,
-      { $inc: { balance: transaction.netAmount } },
+      { $inc: { balance: transaction.netAmount }, lastPaymentMethod: PAYMENT_METHOD.PAYPAL },
       { session }
     );
 
@@ -274,7 +274,7 @@ const approveBankTransfer = async (bankTransferId, adminId) => {
     // تحديث رصيد المحفظة
     await Wallet.findByIdAndUpdate(
       transaction.walletId,
-      { $inc: { balance: netAmount } },
+      { $inc: { balance: netAmount },lastPaymentMethod: PAYMENT_METHOD.PAYPAL, },
       { session }
     );
 
