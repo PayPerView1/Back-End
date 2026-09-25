@@ -15,6 +15,12 @@ const walletSchema = new mongoose.Schema(
       default: 0,
       min: [0, 'Balance cannot be negative'],
     },
+    lastPaymentMethod: {
+     type: String,
+     enum: Object.values(PAYMENT_METHOD),
+     default: null,
+    // يُحدَّث تلقائياً عند كل شحن ناجح
+    },
     currency: {
       type: String,
       default: WALLET_CONSTRAINTS.DEFAULT_CURRENCY,

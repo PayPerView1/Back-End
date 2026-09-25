@@ -46,7 +46,8 @@ const transactionSchema = new mongoose.Schema(
     paymentMethod: {
       type: String,
       enum: Object.values(PAYMENT_METHOD),
-      required: true,
+      required: false,
+      default: null,
     },
     status: {
       type: String,
