@@ -4,6 +4,7 @@ const {
   CONTENT_TYPE,
   MATERIAL_TYPE,
   AI_REVIEW_RESULT,
+  PAUSE_REASON,
 } = require('../constants/campaign.constants');
 
 // ----------------------
@@ -138,6 +139,44 @@ const campaignSchema = new mongoose.Schema(
       type: Number,
       required: true,
       min: 0,
+    },
+        // Sprint 3 additions — Budget & Wallet
+    budgetSpent: {
+      type: Number,
+      default: 0,
+      min: 0,
+      // إجمالي ما أُنفق من ميزانية الحملة
+    },
+    dailyBudgetSpent: {
+      type: Number,
+      default: 0,
+      min: 0,
+      // ما أُنفق اليوم — يُعاد ضبطه كل منتصف ليل UTC
+    },
+    dailyBudgetResetAt: {
+      type: Date,
+      default: null,
+      // تاريخ آخر reset للحد اليومي
+    },
+    pauseReason: {
+      type: String,
+      enum: [...Object.values(PAUSE_REASON), null],
+      default: null,
+    },
+    autoResumeOnRecharge: {
+      type: Boolean,
+      default: false,
+      // false = يدوي (الافتراضي) — true = يستأنف تلقائياً عند إعادة الشحن
+    },
+    walletId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Wallet',
+      default: null,
+      index: true,
+    },
+    lastRechargedAt: {
+      type: Date,
+      default: null,
     },
     cpm: {
       type: Number,
