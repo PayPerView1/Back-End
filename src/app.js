@@ -18,6 +18,11 @@ app.use(passport.initialize());
 
 // Middlewares أساسية
 app.use(cors());
+// ⚠️ لازم يجي قبل express.json() — عشان PayPal webhook يحتاج raw body للتحقق من الـ signature
+app.use(
+  '/api/v1/wallet/paypal/webhook',
+  express.raw({ type: 'application/json' })
+);
 app.use(express.json()); // لقراءة البيانات القادمة بصيغة JSON
 
 // عشان الصور المرفوعة تصير قابلة للوصول عن طريق رابط مباشر
