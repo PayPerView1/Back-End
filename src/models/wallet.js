@@ -1,5 +1,6 @@
+// src/models/wallet.js
 const mongoose = require('mongoose');
-const { WALLET_CONSTRAINTS } = require('../constants/payment.constants');
+const { WALLET_CONSTRAINTS, PAYMENT_METHOD } = require('../constants/payment.constants');
 
 const walletSchema = new mongoose.Schema(
   {
@@ -7,7 +8,7 @@ const walletSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: true,
-      unique: true, // كل معلن له محفظة واحدة فقط
+      unique: true,
       index: true,
     },
     balance: {
@@ -16,10 +17,9 @@ const walletSchema = new mongoose.Schema(
       min: [0, 'Balance cannot be negative'],
     },
     lastPaymentMethod: {
-     type: String,
-     enum: Object.values(PAYMENT_METHOD),
-     default: null,
-    // يُحدَّث تلقائياً عند كل شحن ناجح
+      type: String,
+      enum: Object.values(PAYMENT_METHOD),
+      default: null,
     },
     currency: {
       type: String,

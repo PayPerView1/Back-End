@@ -22,7 +22,6 @@ const {
 // 1. تقديم طلب استرداد
 // ----------------------
 const submitRefundRequest = async (advertiserId, amount) => {
-  // التحقق من الحد الأدنى
   if (amount < WALLET_CONSTRAINTS.MIN_REFUND) {
     const error = new Error(`Minimum refund amount is $${WALLET_CONSTRAINTS.MIN_REFUND}`);
     error.code = 'AMOUNT_TOO_LOW';
@@ -36,11 +35,9 @@ const submitRefundRequest = async (advertiserId, amount) => {
     throw error;
   }
 
-  // حساب الرصيد الحر
   const { freeBalance, reservedBalance } = await calculateFreeBalance(wallet._id);
 
   if (amount > freeBalance) {
-    // التحقق من سبب عدم كفاية الرصيد
     if (reservedBalance > 0) {
       const error = new Error(
         'You have active campaigns with allocated budget. Please pause campaigns before requesting a refund.'
@@ -60,14 +57,12 @@ const submitRefundRequest = async (advertiserId, amount) => {
   session.startTransaction();
 
   try {
-    // خصم المبلغ من المحفظة فوراً (hold)
     await Wallet.findByIdAndUpdate(
       wallet._id,
       { $inc: { balance: -amount } },
       { session }
     );
 
-    // إنشاء REFUND transaction بحالة PENDING
     const transaction = await Transaction.create(
       [
         {
@@ -85,7 +80,6 @@ const submitRefundRequest = async (advertiserId, amount) => {
       { session }
     );
 
-    // إنشاء refund_request
     const refundRequest = await RefundRequest.create(
       [
         {
@@ -103,7 +97,6 @@ const submitRefundRequest = async (advertiserId, amount) => {
 
     await session.commitTransaction();
 
-    // إرسال إيميل تأكيد
     const advertiser = await mongoose.model('User').findById(advertiserId);
     await sendRefundSubmittedEmail(advertiser, {
       amount,
@@ -164,21 +157,18 @@ const cancelRefundRequest = async (refundRequestId, advertiserId) => {
   session.startTransaction();
 
   try {
-    // إعادة المبلغ للمحفظة
     await Wallet.findByIdAndUpdate(
       wallet._id,
       { $inc: { balance: refundRequest.amount } },
       { session }
     );
 
-    // تحديث حالة الطلب
     await RefundRequest.findByIdAndUpdate(
       refundRequestId,
       { status: REFUND_STATUS.CANCELLED },
       { session }
     );
 
-    // تحديث الـ transaction
     await Transaction.findByIdAndUpdate(
       refundRequest.transactionId,
       { status: TRANSACTION_STATUS.CANCELLED },
@@ -209,16 +199,24 @@ const cancelRefundRequest = async (refundRequestId, advertiserId) => {
 // ----------------------
 // 3. جلب طلبات الاسترداد الخاصة بالمعلن
 // ----------------------
-const getRefundRequests = async (walletId, pagination = {}) => {
+// ⚠️ معدّلة: بتاخد advertiserId بدل walletId
+const getRefundRequests = async (advertiserId, pagination = {}) => {
+  const wallet = await Wallet.findOne({ advertiserId }).select('_id');
+  if (!wallet) {
+    const error = new Error('Wallet not found');
+    error.code = 'NOT_FOUND';
+    throw error;
+  }
+
   const page = parseInt(pagination.page) || 1;
   const perPage = Math.min(parseInt(pagination.perPage) || 20, 100);
 
   const [refundRequests, total] = await Promise.all([
-    RefundRequest.find({ walletId })
+    RefundRequest.find({ walletId: wallet._id })
       .sort({ createdAt: -1 })
       .skip((page - 1) * perPage)
       .limit(perPage),
-    RefundRequest.countDocuments({ walletId }),
+    RefundRequest.countDocuments({ walletId: wallet._id }),
   ]);
 
   return {
@@ -263,7 +261,6 @@ const approveRefund = async (refundRequestId, adminId, note) => {
     status: REFUND_STATUS.APPROVED,
     reviewedBy: adminId,
     reviewedAt: new Date(),
-    ...(note && { rejectionNote: note }),
   });
 
   await Transaction.findByIdAndUpdate(refundRequest.transactionId, {
@@ -312,7 +309,6 @@ const rejectRefund = async (refundRequestId, adminId, note) => {
   session.startTransaction();
 
   try {
-    // إعادة المبلغ المحجوز للمحفظة
     await Wallet.findByIdAndUpdate(
       refundRequest.walletId,
       { $inc: { balance: refundRequest.amount } },
