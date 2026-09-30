@@ -69,7 +69,7 @@ const getTransactionById = async (transactionId, walletId) => {
   // جلب receipt إذا كانت bank transfer
   let receiptUrl = null;
   if (transaction.paymentMethod === 'BANK_TRANSFER') {
-    const BankTransfer = require('../../models/bankTransfer.model');
+    const BankTransfer = require('../../models/bankTransfer');
     const bt = await BankTransfer.findOne({
       transactionId: transaction._id,
     }).select('receiptUrl');

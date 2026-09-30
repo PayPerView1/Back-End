@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { WALLET_CONSTRAINTS } = require('../constants/payment.constants');
+const { WALLET_CONSTRAINTS, PAYMENT_METHOD } = require('../constants/payment.constants');
 
 const walletSchema = new mongoose.Schema(
   {

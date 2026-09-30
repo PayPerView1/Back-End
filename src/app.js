@@ -12,7 +12,11 @@ const campaignCreationRoutes = require('./routes/campaign/campaignCreation.route
 const campaignManagementRoutes= require('./routes/campaign/campaignManagement.routes');
 const campaignCategoryRoutes  = require('./routes/campaign/campaignCategory.routes');
 const chatRoutes = require('./routes/ai/chat.routes');
-
+// Wallet imports
+const walletFundingRoutes      = require('./routes/wallet/walletFunding.routes');
+const transactionHistoryRoutes = require('./routes/wallet/transactionHistory.routes');
+const walletRefundRoutes       = require('./routes/wallet/walletRefund.routes');
+const campaignBudgetRoutes     = require('./routes/wallet/campaignBudget.routes');
 const app = express();
 app.use(passport.initialize());
 
@@ -37,7 +41,20 @@ app.get('/', (req, res) => {
 // ربط المسارات
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/profile', profileRoutes);
+// Wallet routes
+app.use('/api/v1/wallet/transactions', transactionHistoryRoutes);
+app.use('/api/v1/wallet/refund',       walletRefundRoutes);
+app.use('/api/v1/wallet/refunds',      walletRefundRoutes);
+app.use('/api/v1/wallet',              walletFundingRoutes);
 
+// Admin wallet routes
+app.use('/api/v1/admin/wallet/bank-transfer', walletFundingRoutes);
+app.use('/api/v1/admin/wallet/refund',        walletRefundRoutes);
+
+// Campaign budget routes
+// ⚠️ لازم تجي قبل /api/v1/campaigns العامة
+// عشان /:campaignId ما يلتقطها قبل budget routes
+app.use('/api/v1/campaigns/:campaignId', campaignBudgetRoutes);
 // ⚠️ ملاحظة مهمة: /drafts لازم تترط قبل /campaigns العامة (نفس مبدأ "الروابط
 // الثابتة أولاً" المذكور بالخطة) — عشان أي توسعة لاحقة (مثلاً /:campaignId من
 // campaignManagement.routes تبع الشخص الثاني) ما تتعارض أو تسبق مسارات /drafts

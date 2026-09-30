@@ -81,6 +81,5 @@ const transactionSchema = new mongoose.Schema(
 transactionSchema.index({ walletId: 1, createdAt: -1 });
 transactionSchema.index({ walletId: 1, type: 1 });
 transactionSchema.index({ walletId: 1, status: 1 });
-transactionSchema.index({ referenceId: 1 }, { sparse: true });
 
 module.exports = mongoose.model('Transaction', transactionSchema);
