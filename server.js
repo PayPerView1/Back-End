@@ -10,6 +10,8 @@ const app = require('./src/app');
 const connectDB = require('./src/config/db.js');
 const startCampaignExpiryJob = require('./src/jobs/campaignExpiry.job');
 const startDraftExpiryJob = require('./src/jobs/draftExpiry.job');
+const { startBudgetMonitor } = require('./src/jobs/budgetMonitor.job');
+const { startDailyBudgetReset } = require('./src/jobs/dailyBudgetReset.job');
 
 // الاتصال بقاعدة البيانات
 connectDB();
@@ -22,4 +24,6 @@ app.listen(PORT, () => {
   // تشغيل الـ cron jobs بعد ما السيرفر يبلش يشتغل فعليًا
   startCampaignExpiryJob();
   startDraftExpiryJob();
+  startBudgetMonitor();
+  startDailyBudgetReset();
 });
