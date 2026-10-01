@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const User = require('../models/user');
-const sendEmail = require('../services/emailService');
+const { sendEmail } = require('../services/emailService');
 const generateToken = require('../utils/generateTokens');
 
 // تعبير نمطي لمراقبة تعقيد كلمة المرور

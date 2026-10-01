@@ -230,7 +230,7 @@ async function submitDraft(draft, finalData, ipAddress = '') {
   }
 
   // 3. تسليمها فورًا للمراجعة (AI review) — نفس مسار POST /campaigns العادي
-  const reviewedCampaign = await submitCampaignForReview(campaign);
+  // const reviewedCampaign = await submitCampaignForReview(campaign);
 
   // 4. حذف المسودة بعد النجاح (حسب الخطة — بدون حذف الملفات، لأنها انتقلت للحملة الجديدة)
   await CampaignDraft.deleteOne({ _id: draft._id });
@@ -239,7 +239,7 @@ async function submitDraft(draft, finalData, ipAddress = '') {
     fromDraftId: draft._id,
   });
 
-  return reviewedCampaign;
+  return campaign;
 }
 
 // ============================================
