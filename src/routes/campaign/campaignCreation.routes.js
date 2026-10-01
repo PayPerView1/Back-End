@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 
-const { createCampaign, getAIReviewResult } = require('../../controllers/campaign/campaignCreation.controller');
+const { createCampaign, getAIReviewResult, triggerAIReview } = require('../../controllers/campaign/campaignCreation.controller');
 const { protect: authMiddleware } = require('../../middlewares/authMiddleware');
 const {
   requireBrandRole,
@@ -22,6 +22,16 @@ router.post(
   campaignCreationRules,
   validate,
   createCampaign
+);
+
+// @route   POST /api/v1/campaigns/:campaignId/ai-review
+// @desc    Trigger AI review for a campaign
+// @access  Private (owner only)
+router.post(
+  '/:campaignId/ai-review',
+  authMiddleware,
+  verifyCampaignOwnership,
+  triggerAIReview
 );
 
 // @route   GET /api/v1/campaigns/:campaignId/ai-review

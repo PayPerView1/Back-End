@@ -1,5 +1,5 @@
 // src/controllers/campaign/campaignCreation.controller.js
-const { createCampaign: createCampaignService, submitCampaignForReview } = require('../../services/campaign/campaignCreation.service');
+const { createCampaign: createCampaignService, submitCampaignForReview, runCampaignAIReview } = require('../../services/campaign/campaignCreation.service');
 
 // ============================================
 // 5.2.1 — POST /api/v1/campaigns
@@ -13,16 +13,14 @@ const createCampaign = async (req, res) => {
     const advertiserId = req.user._id;
     const files = req.files || [];
 
-    // 1. إنشاء الحملة (بحالة DRAFT مبدئيًا)
+    // 1. إنشاء الحملة (بحالة PENDING_REVIEW مبدئيًا)
     const campaign = await createCampaignService(advertiserId, req.body, files, req.ip);
 
-    // 2. تسليمها فورًا للمراجعة (AI review)
-    const reviewedCampaign = await submitCampaignForReview(campaign);
-
+   // 2. إرجاع الحملة بدون استدعاء AI review
     res.status(201).json({
       success: true,
       message: 'Campaign created and submitted for review',
-      campaign: reviewedCampaign,
+      campaign,
     });
   } catch (error) {
     // console.error(`[campaignCreation.controller] createCampaign error: ${error.message}`);
@@ -56,8 +54,30 @@ const getAIReviewResult = async (req, res) => {
     });
   }
 };
+const triggerAIReview = async (req, res) => {
+  try {
+    const campaign = req.campaign;
+
+    const updatedCampaign = await runCampaignAIReview(campaign);
+
+    return res.status(200).json({
+      success: true,
+      message: 'AI review completed',
+      campaign: updatedCampaign,
+    });
+  } catch (error) {
+    console.error('[campaignCreation.controller] triggerAIReview error:', error);
+
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({
+      success: false,
+      message: error.message || 'Server error while running AI review',
+    });
+  }
+};
 
 module.exports = {
   createCampaign,
   getAIReviewResult,
+  triggerAIReview,
 };
