@@ -81,6 +81,8 @@ async function createCampaign(
         declaredAt: new Date(),
         ipAddress,
       },
+       status: CAMPAIGN_STATUS.PENDING_REVIEW,
+       submittedAt: new Date(),
     });
 
     // 3. تسجيل حدث الإنشاء
@@ -119,62 +121,43 @@ async function createCampaign(
 async function processAIReviewResult(campaign, aiResult) {
   const newStatus = mapAIResultToStatus(aiResult.result);
 
-  // فحص أمان إضافي
   if (!isTransitionAllowed(campaign.status, newStatus)) {
-    console.error(
-      `[campaignCreation.service] Blocked invalid transition: ` +
-      `${campaign.status} → ${newStatus} for campaign ${campaign._id}`
+    const error = new Error(
+      `Invalid campaign status transition: ${campaign.status} -> ${newStatus}`
     );
-
-    // أسلم افتراض: تحويل لمراجعة يدوية
-    campaign.status = CAMPAIGN_STATUS.MANUAL_REVIEW;
-
-  } else {
-    campaign.status = newStatus;
+    error.statusCode = 409;
+    throw error;
   }
 
-  // تجهيز البيانات التي سيتم تحديثها
   const updateData = {
-    status: campaign.status,
-
+    status: newStatus,
     'aiReview.result': aiResult.result,
     'aiReview.score': aiResult.score,
     'aiReview.feedback': aiResult.feedback,
     'aiReview.reviewedAt': new Date(),
   };
 
-  // إذا أصبحت الحملة ACTIVE
-  if (campaign.status === CAMPAIGN_STATUS.ACTIVE) {
+  if (newStatus === CAMPAIGN_STATUS.ACTIVE) {
     updateData.activatedAt = new Date();
   }
 
-  // تحديث الحملة مباشرة في MongoDB
   const updatedCampaign = await Campaign.findByIdAndUpdate(
     campaign._id,
-    {
-      $set: updateData,
-    },
+    { $set: updateData },
     {
       returnDocument: 'after',
       runValidators: true,
     }
   );
 
-  // التأكد أن الحملة موجودة
   if (!updatedCampaign) {
-    throw new Error(
-      `Campaign not found: ${campaign._id}`
-    );
+    throw new Error(`Campaign not found: ${campaign._id}`);
   }
 
-  // نسجل الحدث المناسب حسب النتيجة
   const actionMap = {
     [CAMPAIGN_STATUS.ACTIVE]: CAMPAIGN_ACTION.AI_APPROVED,
-
     [CAMPAIGN_STATUS.REJECTED]: CAMPAIGN_ACTION.AI_REJECTED,
-
-    [CAMPAIGN_STATUS.MANUAL_REVIEW]:
-      CAMPAIGN_ACTION.SENT_TO_MANUAL_REVIEW,
+    [CAMPAIGN_STATUS.MANUAL_REVIEW]: CAMPAIGN_ACTION.SENT_TO_MANUAL_REVIEW,
   };
 
   const action =
@@ -258,7 +241,29 @@ async function submitCampaignForReview(campaign) {
   }
 }
 
+async function runCampaignAIReview(campaign) {
+  // 1. Only allow AI review from PENDING_REVIEW
+  if (campaign.status !== CAMPAIGN_STATUS.PENDING_REVIEW) {
+    const error = new Error('Campaign is not in PENDING_REVIEW status');
+    error.statusCode = 409;
+    throw error;
+  }
 
+  try {
+    // 2. Call AI service
+    const aiResult = await reviewCampaign(campaign);
+
+    // 3. Update campaign with AI result
+    return await processAIReviewResult(campaign, aiResult);
+  } catch (error) {
+    // 4. If AI fails, send to manual review
+    console.error(
+      `[campaignReview.service] AI review failed for campaign ${campaign._id}: ${error.message}`
+    );
+
+    return await handleAIServiceFailure(campaign, error.message);
+  }
+}
 // ============================================
 // Exports
 // ============================================
@@ -267,4 +272,5 @@ module.exports = {
   createCampaign,
   submitCampaignForReview,
   processAIReviewResult,
+  runCampaignAIReview,
 };
