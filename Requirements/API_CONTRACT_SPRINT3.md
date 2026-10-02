@@ -343,16 +343,16 @@ GET /api/v1/wallet/transactions
 ```
 
 **Query Parameters**
-| Param | Type | Required | Values |
+| Param | Type | Required | Values / Notes |
 |---|---|---|---|
 | `type` | String | No | `CREDIT`, `DEBIT`, `REFUND` |
 | `status` | String | No | `PENDING`, `COMPLETED`, `FAILED`, `CANCELLED`, `UNDER_REVIEW` |
+| `paymentMethod` | String | No | `PAYPAL`, `BANK_TRANSFER` |
+| `dateFrom` | String | No | ISO date — e.g. `2026-08-01` (inclusive) |
+| `dateTo` | String | No | ISO date — e.g. `2026-08-31` (inclusive, end of day UTC) |
+| `search` | String | No | Searches `referenceId` and `description` (case-insensitive) |
 | `page` | Number | No | default: 1 |
 | `perPage` | Number | No | default: 20, max: 100 |
-| `paymentMethod` | String | No | Accepted, ignored in MVP |
-| `dateFrom` | String | No | Accepted, ignored in MVP |
-| `dateTo` | String | No | Accepted, ignored in MVP |
-| `search` | String | No | Accepted, ignored in MVP |
 
 **Response 200**
 ```json
@@ -372,20 +372,6 @@ GET /api/v1/wallet/transactions
       "campaignId": null,
       "campaignName": null,
       "createdAt": "2026-08-20T10:00:00Z"
-    },
-    {
-      "id": "uuid",
-      "type": "DEBIT",
-      "grossAmount": 1000.00,
-      "commission": 0,
-      "netAmount": 1000.00,
-      "currency": "USD",
-      "paymentMethod": null,
-      "status": "COMPLETED",
-      "description": "Budget allocated to campaign",
-      "campaignId": "uuid",
-      "campaignName": "Ramadan Campaign 2026",
-      "createdAt": "2026-08-20T11:00:00Z"
     }
   ],
   "pagination": {
@@ -399,13 +385,6 @@ GET /api/v1/wallet/transactions
 
 ---
 
-### 2.2 Get Transaction Detail
-
-Full detail view for a single transaction, including receipt link for bank transfers.
-
-```
-GET /api/v1/wallet/transactions/:id
-```
 
 **Response 200**
 ```json
@@ -441,7 +420,7 @@ GET /api/v1/wallet/transactions/:id
 ### 2.3 Export Transactions (Excel)
 
 Exports all transactions matching current filters as an Excel file.
-
+Supports same filters as 2.1 except `page` and `perPage` (exports all matching records).
 ```
 GET /api/v1/wallet/transactions/export
 ```
@@ -461,6 +440,24 @@ Content-Disposition: attachment; filename="transactions_2026-08-20.xlsx"
 { "success": false, "message": "Export failed", "code": "INTERNAL_ERROR" }
 ```
 
+### 2.4 Export Transactions (PDF)
+
+Exports all transactions matching current filters as a PDF file.
+
+GET /api/v1/wallet/transactions/export/pdf
+
+
+**Query Parameters**
+Same as 2.1 (type, status, paymentMethod, dateFrom, dateTo, search).
+`page` and `perPage` are ignored — exports all matching records.
+
+**Response 200**
+
+
+**Error Response**
+```json
+{ "success": false, "message": "PDF export failed", "code": "INTERNAL_ERROR" }
+```
 ---
 
 ## 3. Campaign Budget
@@ -722,9 +719,11 @@ PUT /api/v1/campaigns/:id/auto-recharge
 ## 4. Refund
 
 ### 4.1 Submit Refund Request
+**Fee Calculation:**
+`fee = max(amount × REFUND_FEE_RATE, REFUND_MIN_FEE)`
+`netAmount = amount − fee`
+Current rate: configured via environment variables (0 = no fee).
 
-Validates free balance (wallet.balance − reserved campaign budgets),
-places hold on requested amount, creates refund request.
 
 ```
 POST /api/v1/wallet/refund

@@ -19,10 +19,28 @@ const {
 } = require('../emailService');
 
 // ----------------------
+// Helper: حساب رسوم الاسترداد
+// ----------------------
+const calculateRefundFee = (amount) => {
+  const feeRate = parseFloat(process.env.REFUND_FEE_RATE) || 0;
+  const minFee  = parseFloat(process.env.REFUND_MIN_FEE)  || 0;
+
+  // إذا كانت القيم صفر → لا رسوم (MVP)
+  if (feeRate === 0 && minFee === 0) {
+    return { fee: 0, netAmount: amount };
+  }
+
+  const calculatedFee = Math.max(amount * feeRate, minFee);
+  const fee           = parseFloat(calculatedFee.toFixed(2));
+  const netAmount     = parseFloat((amount - fee).toFixed(2));
+
+  return { fee, netAmount };
+};
+
+// ----------------------
 // 1. تقديم طلب استرداد
 // ----------------------
 const submitRefundRequest = async (advertiserId, amount) => {
-  // التحقق من الحد الأدنى
   if (amount < WALLET_CONSTRAINTS.MIN_REFUND) {
     const error = new Error(`Minimum refund amount is $${WALLET_CONSTRAINTS.MIN_REFUND}`);
     error.code = 'AMOUNT_TOO_LOW';
@@ -36,11 +54,9 @@ const submitRefundRequest = async (advertiserId, amount) => {
     throw error;
   }
 
-  // حساب الرصيد الحر
   const { freeBalance, reservedBalance } = await calculateFreeBalance(wallet._id);
 
   if (amount > freeBalance) {
-    // التحقق من سبب عدم كفاية الرصيد
     if (reservedBalance > 0) {
       const error = new Error(
         'You have active campaigns with allocated budget. Please pause campaigns before requesting a refund.'
@@ -48,7 +64,6 @@ const submitRefundRequest = async (advertiserId, amount) => {
       error.code = 'ACTIVE_CAMPAIGN_EXISTS';
       throw error;
     }
-
     const error = new Error(
       `Requested amount exceeds available balance. Available: $${freeBalance.toFixed(2)}`
     );
@@ -56,46 +71,47 @@ const submitRefundRequest = async (advertiserId, amount) => {
     throw error;
   }
 
+  // حساب الرسوم
+  const { fee, netAmount } = calculateRefundFee(amount);
+
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    // خصم المبلغ من المحفظة فوراً (hold)
+    // خصم المبلغ الكامل من المحفظة فوراً (hold)
     await Wallet.findByIdAndUpdate(
       wallet._id,
       { $inc: { balance: -amount } },
       { session }
     );
 
-    // إنشاء REFUND transaction بحالة PENDING
     const transaction = await Transaction.create(
       [
         {
-          walletId: wallet._id,
-          type: TRANSACTION_TYPE.REFUND,
-          grossAmount: amount,
-          commission: 0,
-          netAmount: amount,
-          currency: 'USD',
+          walletId:      wallet._id,
+          type:          TRANSACTION_TYPE.REFUND,
+          grossAmount:   amount,
+          commission:    fee,
+          netAmount,
+          currency:      'USD',
           paymentMethod: wallet.lastPaymentMethod || null,
-          status: TRANSACTION_STATUS.PENDING,
-          description: 'Refund request submitted',
+          status:        TRANSACTION_STATUS.PENDING,
+          description:   'Refund request submitted',
         },
       ],
       { session }
     );
 
-    // إنشاء refund_request
     const refundRequest = await RefundRequest.create(
       [
         {
-          walletId: wallet._id,
+          walletId:      wallet._id,
           transactionId: transaction[0]._id,
           amount,
-          fee: 0,
-          netAmount: amount,
-          refundMethod: wallet.lastPaymentMethod || 'PAYPAL',
-          status: REFUND_STATUS.PENDING,
+          fee,
+          netAmount,
+          refundMethod:  wallet.lastPaymentMethod || 'PAYPAL',
+          status:        REFUND_STATUS.PENDING,
         },
       ],
       { session }
@@ -103,8 +119,7 @@ const submitRefundRequest = async (advertiserId, amount) => {
 
     await session.commitTransaction();
 
-    // إرسال إيميل تأكيد
-    const advertiser = await mongoose.model('User').findById(advertiserId);
+    const advertiser   = await mongoose.model('User').findById(advertiserId);
     await sendRefundSubmittedEmail(advertiser, {
       amount,
       refundRequestId: refundRequest[0]._id,
@@ -114,12 +129,12 @@ const submitRefundRequest = async (advertiserId, amount) => {
 
     return {
       refundRequestId: refundRequest[0]._id,
-      transactionId: transaction[0]._id,
+      transactionId:   transaction[0]._id,
       amount,
-      fee: 0,
-      netAmount: amount,
-      refundMethod: refundRequest[0].refundMethod,
-      status: REFUND_STATUS.PENDING,
+      fee,
+      netAmount,
+      refundMethod:    refundRequest[0].refundMethod,
+      status:          REFUND_STATUS.PENDING,
       walletBalanceAfter: updatedWallet.balance,
       message: 'Refund request submitted. It will be reviewed within 24–48 hours.',
       createdAt: refundRequest[0].createdAt,
@@ -133,7 +148,7 @@ const submitRefundRequest = async (advertiserId, amount) => {
 };
 
 // ----------------------
-// 2. إلغاء طلب الاسترداد (فقط إذا كان PENDING)
+// 2. إلغاء طلب الاسترداد
 // ----------------------
 const cancelRefundRequest = async (refundRequestId, advertiserId) => {
   const wallet = await Wallet.findOne({ advertiserId });
@@ -144,7 +159,7 @@ const cancelRefundRequest = async (refundRequestId, advertiserId) => {
   }
 
   const refundRequest = await RefundRequest.findOne({
-    _id: refundRequestId,
+    _id:      refundRequestId,
     walletId: wallet._id,
   });
 
@@ -164,21 +179,19 @@ const cancelRefundRequest = async (refundRequestId, advertiserId) => {
   session.startTransaction();
 
   try {
-    // إعادة المبلغ للمحفظة
+    // إعادة المبلغ الكامل (amount وليس netAmount) للمحفظة
     await Wallet.findByIdAndUpdate(
       wallet._id,
       { $inc: { balance: refundRequest.amount } },
       { session }
     );
 
-    // تحديث حالة الطلب
     await RefundRequest.findByIdAndUpdate(
       refundRequestId,
       { status: REFUND_STATUS.CANCELLED },
       { session }
     );
 
-    // تحديث الـ transaction
     await Transaction.findByIdAndUpdate(
       refundRequest.transactionId,
       { status: TRANSACTION_STATUS.CANCELLED },
@@ -188,13 +201,13 @@ const cancelRefundRequest = async (refundRequestId, advertiserId) => {
     await session.commitTransaction();
 
     const updatedWallet = await Wallet.findById(wallet._id);
-    const advertiser = await mongoose.model('User').findById(advertiserId);
+    const advertiser    = await mongoose.model('User').findById(advertiserId);
 
     await sendRefundCancelledEmail(advertiser, { amount: refundRequest.amount });
 
     return {
       refundRequestId,
-      status: REFUND_STATUS.CANCELLED,
+      status:            REFUND_STATUS.CANCELLED,
       walletBalanceAfter: updatedWallet.balance,
       message: 'Refund request cancelled. Amount returned to your wallet.',
     };
@@ -207,10 +220,10 @@ const cancelRefundRequest = async (refundRequestId, advertiserId) => {
 };
 
 // ----------------------
-// 3. جلب طلبات الاسترداد الخاصة بالمعلن
+// 3. جلب طلبات الاسترداد
 // ----------------------
 const getRefundRequests = async (walletId, pagination = {}) => {
-  const page = parseInt(pagination.page) || 1;
+  const page    = parseInt(pagination.page)    || 1;
   const perPage = Math.min(parseInt(pagination.perPage) || 20, 100);
 
   const [refundRequests, total] = await Promise.all([
@@ -223,14 +236,14 @@ const getRefundRequests = async (walletId, pagination = {}) => {
 
   return {
     data: refundRequests.map((r) => ({
-      id: r._id,
-      amount: r.amount,
-      fee: r.fee,
-      netAmount: r.netAmount,
+      id:           r._id,
+      amount:       r.amount,
+      fee:          r.fee,
+      netAmount:    r.netAmount,
       refundMethod: r.refundMethod,
-      status: r.status,
-      createdAt: r.createdAt,
-      updatedAt: r.updatedAt,
+      status:       r.status,
+      createdAt:    r.createdAt,
+      updatedAt:    r.updatedAt,
     })),
     pagination: {
       page,
@@ -242,7 +255,7 @@ const getRefundRequests = async (walletId, pagination = {}) => {
 };
 
 // ----------------------
-// 4. موافقة الأدمن على طلب الاسترداد
+// 4. موافقة الأدمن
 // ----------------------
 const approveRefund = async (refundRequestId, adminId, note) => {
   const refundRequest = await RefundRequest.findById(refundRequestId);
@@ -260,7 +273,7 @@ const approveRefund = async (refundRequestId, adminId, note) => {
   }
 
   await RefundRequest.findByIdAndUpdate(refundRequestId, {
-    status: REFUND_STATUS.APPROVED,
+    status:     REFUND_STATUS.APPROVED,
     reviewedBy: adminId,
     reviewedAt: new Date(),
     ...(note && { rejectionNote: note }),
@@ -270,28 +283,29 @@ const approveRefund = async (refundRequestId, adminId, note) => {
     status: TRANSACTION_STATUS.COMPLETED,
   });
 
-  const wallet = await Wallet.findById(refundRequest.walletId);
+  const wallet     = await Wallet.findById(refundRequest.walletId);
   const advertiser = await mongoose.model('User').findById(wallet.advertiserId);
 
   await sendRefundApprovedEmail(advertiser, {
-    amount: refundRequest.amount,
-    netAmount: refundRequest.netAmount,
+    amount:       refundRequest.amount,
+    netAmount:    refundRequest.netAmount,
     refundMethod: refundRequest.refundMethod,
   });
 
   return {
     refundRequestId,
-    action: 'APPROVED',
-    amount: refundRequest.amount,
-    netAmount: refundRequest.netAmount,
+    action:       'APPROVED',
+    amount:       refundRequest.amount,
+    fee:          refundRequest.fee,
+    netAmount:    refundRequest.netAmount,
     refundMethod: refundRequest.refundMethod,
-    status: REFUND_STATUS.APPROVED,
+    status:       REFUND_STATUS.APPROVED,
     message: 'Refund approved. Funds will be returned within gateway processing time.',
   };
 };
 
 // ----------------------
-// 5. رفض الأدمن لطلب الاسترداد
+// 5. رفض الأدمن
 // ----------------------
 const rejectRefund = async (refundRequestId, adminId, note) => {
   const refundRequest = await RefundRequest.findById(refundRequestId);
@@ -312,7 +326,7 @@ const rejectRefund = async (refundRequestId, adminId, note) => {
   session.startTransaction();
 
   try {
-    // إعادة المبلغ المحجوز للمحفظة
+    // إعادة المبلغ الكامل وليس netAmount
     await Wallet.findByIdAndUpdate(
       refundRequest.walletId,
       { $inc: { balance: refundRequest.amount } },
@@ -322,9 +336,9 @@ const rejectRefund = async (refundRequestId, adminId, note) => {
     await RefundRequest.findByIdAndUpdate(
       refundRequestId,
       {
-        status: REFUND_STATUS.REJECTED,
-        reviewedBy: adminId,
-        reviewedAt: new Date(),
+        status:        REFUND_STATUS.REJECTED,
+        reviewedBy:    adminId,
+        reviewedAt:    new Date(),
         rejectionNote: note,
       },
       { session }
@@ -339,7 +353,7 @@ const rejectRefund = async (refundRequestId, adminId, note) => {
     await session.commitTransaction();
 
     const updatedWallet = await Wallet.findById(refundRequest.walletId);
-    const advertiser = await mongoose.model('User').findById(updatedWallet.advertiserId);
+    const advertiser    = await mongoose.model('User').findById(updatedWallet.advertiserId);
 
     await sendRefundRejectedEmail(advertiser, {
       amount: refundRequest.amount,
@@ -348,9 +362,9 @@ const rejectRefund = async (refundRequestId, adminId, note) => {
 
     return {
       refundRequestId,
-      action: 'REJECTED',
+      action:            'REJECTED',
       note,
-      status: REFUND_STATUS.REJECTED,
+      status:            REFUND_STATUS.REJECTED,
       walletBalanceAfter: updatedWallet.balance,
       message: 'Refund rejected. Held amount returned to wallet.',
     };
