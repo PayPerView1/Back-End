@@ -59,5 +59,8 @@
       "cloudinary": "$cloudinary",
       "multer": "$multer"
     }
+  },
+  "allowScripts": {
+    "mongodb-memory-server@11.2.0": true
   }
 }

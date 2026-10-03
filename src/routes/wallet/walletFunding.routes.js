@@ -8,6 +8,7 @@ const {
   getBankDetails,
   initiateFunding,
   handlePaypalWebhook,
+  handleMoyasarWebhook,
   uploadBankTransferReceipt,
   reviewBankTransfer,
 } = require('../../controllers/wallet/walletFunding.controller');
@@ -38,7 +39,7 @@ router.post('/fund', protect, validateFundingRequest, initiateFunding);
 // ⚠️ express.raw مضبوط على هذا الرابط في app.js
 // ----------------------------------------
 router.post('/paypal/webhook', handlePaypalWebhook);
-
+router.post('/moyasar/webhook', handleMoyasarWebhook);
 // ----------------------------------------
 // POST /api/v1/wallet/bank-transfer/upload
 // ----------------------------------------

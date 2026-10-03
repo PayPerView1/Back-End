@@ -1,3 +1,4 @@
+// src/models/transaction.js
 const mongoose = require('mongoose');
 const {
   TRANSACTION_TYPE,
