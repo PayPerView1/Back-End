@@ -217,6 +217,25 @@ const sendRefundCancelledEmail = async (advertiser, { amount }) => {
   });
 };
 
+
+// ----------------------
+// Dormant Wallet Email
+// ----------------------
+
+const sendDormantWalletEmail = async (advertiser, { balance }) => {
+  await sendEmail({
+    email:   advertiser.email,
+    subject: 'You have an unused wallet balance',
+    message: `
+      <p>Hi <strong>${advertiser.fullName}</strong>,</p>
+      <p>We noticed your Pay Per View wallet has had an unused balance of
+         <strong>$${balance.toFixed(2)}</strong> for more than 6 months.</p>
+      <p>You can use it to fund campaigns or request a refund at any time from your dashboard.</p>
+      <p>If you have any questions, feel free to contact our support team.</p>
+    `,
+  });
+};
+
 module.exports = {
   sendEmail,
   // Funding
@@ -232,6 +251,8 @@ module.exports = {
   sendRefundApprovedEmail,
   sendRefundRejectedEmail,
   sendRefundCancelledEmail,
+// Dormant Wallet  
+  sendDormantWalletEmail,
 };
 // const sgMail = require('@sendgrid/mail');
 

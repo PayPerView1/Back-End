@@ -39,6 +39,10 @@ const getTransactions = async (req, res) => {
     const filters = {
       type:   req.query.type,
       status: req.query.status,
+      paymentMethod: req.query.paymentMethod,
+      dateFrom:      req.query.dateFrom,
+      dateTo:        req.query.dateTo,
+      search:        req.query.search,
     };
 
     const pagination = {
@@ -78,6 +82,10 @@ const exportTransactions = async (req, res) => {
     const filters = {
       type:   req.query.type,
       status: req.query.status,
+      paymentMethod: req.query.paymentMethod,
+      dateFrom:      req.query.dateFrom,
+      dateTo:        req.query.dateTo,
+      search:        req.query.search,
     };
 
     const buffer = await transactionHistoryService.exportTransactionsExcel(
@@ -141,8 +149,46 @@ const getTransactionById = async (req, res) => {
   }
 };
 
+
+// ============================================
+// GET /api/v1/wallet/transactions/export/pdf
+// ============================================
+const exportTransactionsPDF = async (req, res) => {
+  try {
+    const wallet = await getAdvertiserWallet(req.user._id);
+
+    const filters = {
+      type:          req.query.type,
+      status:        req.query.status,
+      paymentMethod: req.query.paymentMethod,
+      dateFrom:      req.query.dateFrom,
+      dateTo:        req.query.dateTo,
+      search:        req.query.search,
+    };
+
+    const buffer   = await transactionHistoryService.exportTransactionsPDF(
+      wallet._id,
+      filters
+    );
+
+    const filename = `transactions_${new Date().toISOString().split('T')[0]}.pdf`;
+
+    res.setHeader('Content-Type',        'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    res.status(200).send(buffer);
+  } catch (error) {
+    console.error('[transactionHistory.controller] exportTransactionsPDF error:', error);
+    res.status(getStatusFromCode(error.code)).json({
+      success: false,
+      message: error.message || 'PDF export failed',
+      code:    error.code    || 'INTERNAL_ERROR',
+    });
+  }
+};
 module.exports = {
   getTransactions,
   exportTransactions,
+  exportTransactionsPDF,
   getTransactionById,
 };
