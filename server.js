@@ -12,6 +12,7 @@ const startCampaignExpiryJob = require('./src/jobs/campaignExpiry.job');
 const startDraftExpiryJob = require('./src/jobs/draftExpiry.job');
 const { startBudgetMonitor } = require('./src/jobs/budgetMonitor.job');
 const { startDailyBudgetReset } = require('./src/jobs/dailyBudgetReset.job');
+const { startDormantWalletJob } = require('./src/jobs/dormantWallet.job');
 
 // الاتصال بقاعدة البيانات
 connectDB();
@@ -26,4 +27,5 @@ app.listen(PORT, () => {
   startDraftExpiryJob();
   startBudgetMonitor();
   startDailyBudgetReset();
+  startDormantWalletJob();
 });

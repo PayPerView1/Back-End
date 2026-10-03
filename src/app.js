@@ -27,6 +27,11 @@ app.use(
   '/api/v1/wallet/paypal/webhook',
   express.raw({ type: 'application/json' })
 );
+
+app.use(                                           // ← جديد
+  '/api/v1/wallet/moyasar/webhook',
+  express.raw({ type: 'application/json' })
+);
 app.use(express.json()); // لقراءة البيانات القادمة بصيغة JSON
 
 // عشان الصور المرفوعة تصير قابلة للوصول عن طريق رابط مباشر

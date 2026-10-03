@@ -1,3 +1,4 @@
+// src/models/wallet.js
 const mongoose = require('mongoose');
 const { WALLET_CONSTRAINTS, PAYMENT_METHOD } = require('../constants/payment.constants');
 
