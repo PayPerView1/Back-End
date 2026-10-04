@@ -50,8 +50,8 @@ const createOrder = async (amount, transactionId) => {
         brand_name: 'Pay Per View',
         landing_page: 'BILLING',
         user_action: 'PAY_NOW',
-        return_url: `${process.env.FRONTEND_URL}/wallet/payment/success`,
-        cancel_url: `${process.env.FRONTEND_URL}/wallet/payment/cancel`,
+        return_url: `${process.env.FRONTEND_URL}/advertiser/wallet/payment/success`,
+        cancel_url: `${process.env.FRONTEND_URL}/advertiser/wallet/payment/cancel`,
       },
     },
     {
