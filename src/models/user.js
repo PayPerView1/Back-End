@@ -50,7 +50,7 @@ const userSchema = new mongoose.Schema(
     role: {
       type: String,
       enum: ['BRAND', 'CLIPPER', 'ADMIN'],
-      default: 'CLIPPER',
+      default: 'BRAND',
       required: true,
     },
     googleId: {

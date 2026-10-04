@@ -20,6 +20,7 @@ passport.use(
           user = await User.create({
             fullName: profile.displayName,
             email: profile.emails[0].value,
+            role: 'BRAND',
             googleId: profile.id,
             isVerified: true, // الحساب مفعل تلقائياً من Google
           });
