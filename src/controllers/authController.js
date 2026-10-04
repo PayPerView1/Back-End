@@ -57,7 +57,7 @@ exports.register = async (req, res) => {
       fullName,
       email,
       password,
-      role: role || 'CLIPPER',
+      role: role || 'BRAND',
       phoneNumber: phoneNumber || '',
       phoneCountryCode: phoneCountryCode || '',
       country: country || '',
