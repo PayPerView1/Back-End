@@ -60,8 +60,16 @@ const transactionSchema = new mongoose.Schema(
       type: String,
       unique: true,
       sparse: true,
-      // sparse: true لأنه nullable — التحويل البنكي اليدوي ليس له reference_id من بوابة
-      // UNIQUE لضمان idempotency مع PayPal webhooks
+      // معرّف الطلب لدى البوابة: PayPal order ID أو Moyasar invoice ID
+      // لا يُستبدل بعد الإنشاء، ويُستخدم للربط (مثلاً في /paypal/capture)
+      // sparse: التحويل البنكي اليدوي ليس له reference من بوابة
+    },
+    captureId: {
+      type: String,
+      unique: true,
+      sparse: true,
+      // معرّف الدفعة الفعلية: PayPal capture ID أو Moyasar payment ID
+      // UNIQUE لضمان ألا تُحتسب نفس الدفعة على أكثر من transaction
     },
     description: {
       type: String,
@@ -82,5 +90,7 @@ const transactionSchema = new mongoose.Schema(
 transactionSchema.index({ walletId: 1, createdAt: -1 });
 transactionSchema.index({ walletId: 1, type: 1 });
 transactionSchema.index({ walletId: 1, status: 1 });
+// لتنظيف الـ transactions المعلّقة القديمة (cancelStalePendingTransactions)
+transactionSchema.index({ status: 1, createdAt: 1 });
 
 module.exports = mongoose.model('Transaction', transactionSchema);
