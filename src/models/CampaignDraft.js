@@ -47,7 +47,12 @@ const campaignDraftSchema = new mongoose.Schema(
     totalBudget:      { type: Number, default: null },
     cpm:              { type: Number, default: null },
     dailyBudgetLimit: { type: Number, default: null },
-
+    // [Sprint 4] حد المتقدمين وشروطهم (اختيارية)
+     maxApplicants: { type: Number, default: null },
+     requirements: {
+     minFollowers: { type: Number, default: null },
+     minRating:    { type: Number, default: null },
+     },
     brief: {
       mainIdea:         { type: String, default: '' },
       tone:             { type: String, default: '' },

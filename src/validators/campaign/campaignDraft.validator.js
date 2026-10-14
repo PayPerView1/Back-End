@@ -5,7 +5,7 @@ const {
   getMissingCampaignFields,
   MIXED_SUB_CATEGORIES,
 } = require('./campaignCreation.validator');
-
+const { normalizeCountryList } = require('../../utils/countries.utils');
 // middleware مشترك بيفحص نتيجة أي قواعد express-validator (نفس فلسفة باقي المشروع)
 const validate = (req, res, next) => {
   const errors = validationResult(req);
@@ -95,13 +95,14 @@ const draftUpdateRules = [
     .optional()
     .isArray({ min: 1 })
     .withMessage('Target countries must be a non-empty array if provided')
-    .custom((value) => {
-      const invalidCodes = value.filter((code) => !/^[A-Za-z]{3}$/.test(code));
-      if (invalidCodes.length > 0) {
-        throw new Error(`Invalid country codes (must be 3 letters): ${invalidCodes.join(', ')}`);
-      }
-      return true;
-    }),
+   .custom((value, { req }) => {
+     const { valid, invalid } = normalizeCountryList(value);
+     if (invalid.length > 0) {
+       throw new Error(`Invalid country codes (use ISO alpha-3, e.g. SAU): ${invalid.join(', ')}`);
+     }
+     req.body.targetCountries = valid; // أحرف كبيرة، بدون تكرار
+     return true;
+   }),
 
   // هون بس checkbox عام بسيط (halalDeclared: Boolean) — مش الـ 6 تفاصيل الدقيقة
   // (هاي التفاصيل الكاملة بتنبعت لاحقًا وقت submit نفسه، مش أثناء التسويد العادي)
@@ -109,6 +110,27 @@ const draftUpdateRules = [
     .optional()
     .isBoolean()
     .withMessage('halalDeclared must be true or false'),
+    // Sprint 4: إضافة maxApplicants و requirements للمسودة
+    body('startDate').optional({ nullable: true })
+    .isISO8601().withMessage('Start date must be a valid date').toDate(),
+
+  body('endDate').optional({ nullable: true })
+    .isISO8601().withMessage('End date must be a valid date').toDate()
+    .custom((value, { req }) => {
+      if (value && req.body.startDate && new Date(value) <= new Date(req.body.startDate)) {
+        throw new Error('End date must be after start date');
+      }
+      return true;
+    }),
+
+  body('maxApplicants').optional({ nullable: true })
+    .isInt({ min: 1 }).withMessage('Max applicants must be a positive integer').toInt(),
+
+  body('requirements.minFollowers').optional({ nullable: true })
+    .isInt({ min: 0 }).withMessage('Min followers must be 0 or more').toInt(),
+
+  body('requirements.minRating').optional({ nullable: true })
+    .isFloat({ min: 0, max: 5 }).withMessage('Min rating must be between 0 and 5').toFloat(),
 ];
 
 // ============================================

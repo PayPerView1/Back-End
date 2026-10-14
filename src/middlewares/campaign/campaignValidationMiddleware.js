@@ -116,8 +116,20 @@ const requireBrandRole = (req, res, next) => {
   next();
 };
 
+const requireClipperRole = (req, res, next) => {
+  if (!req.user || req.user.role !== 'CLIPPER') {
+    return res.status(403).json({
+      success: false,
+      message: 'Only content creator accounts can perform this action',
+      code: 'FORBIDDEN',
+    });
+  }
+  next();
+};
+
 module.exports = {
   verifyCampaignOwnership,
   verifyDraftOwnership,
   requireBrandRole,
+  requireClipperRole,
 };

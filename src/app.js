@@ -1,3 +1,4 @@
+// src/app.js
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -17,6 +18,13 @@ const walletFundingRoutes      = require('./routes/wallet/walletFunding.routes')
 const transactionHistoryRoutes = require('./routes/wallet/transactionHistory.routes');
 const walletRefundRoutes       = require('./routes/wallet/walletRefund.routes');
 const campaignBudgetRoutes     = require('./routes/wallet/campaignBudget.routes');
+// Sprint 4 imports
+const campaignDiscoveryRoutes  = require('./routes/campaign/campaignDiscovery.routes');
+const applicationRoutes        = require('./routes/application/application.routes');
+const reportRoutes             = require('./routes/moderation/report.routes');
+const favoriteRoutes           = require('./routes/creator/favorite.routes');
+const creatorPreferencesRoutes = require('./routes/creator/creatorPreferences.routes');
+const notificationRoutes       = require('./routes/notification/notification.routes');
 const app = express();
 app.use(passport.initialize());
 
@@ -55,6 +63,26 @@ app.use('/api/v1/wallet',              walletFundingRoutes);
 // Admin wallet routes
 app.use('/api/v1/admin/wallet/bank-transfer', walletFundingRoutes);
 app.use('/api/v1/admin/wallet/refund',        walletRefundRoutes);
+
+// ═══════════════════════════════════════════════════════════════
+// Sprint 4 — Discovery, Applications, Reports, Favorites, Notifications
+// ⚠️ لازم تجي قبل campaignBudgetRoutes: ذاك الـ router مركَّب على
+//    /api/v1/campaigns/:campaignId وفيه router.use(protect, requireBrandRole)،
+//    فأي طلب من مبدع (أو زائر) يمر عليه أولاً ويأخذ 401/403.
+//
+// قاعدتان:
+//  1) router يمتد على أكثر من بادئة (discovery / applications / reports):
+//     مركَّب على /api/v1 ومساراته كاملة، ممنوع فيه router.use(protect, ...)،
+//     والـ middleware على كل route على حدة.
+//  2) router ببادئة واحدة (favorites / preferences / notifications):
+//     مركَّب على بادئته ومساراته نسبية، ويجوز فيه router.use(protect, ...).
+// ═══════════════════════════════════════════════════════════════
+app.use('/api/v1', campaignDiscoveryRoutes);   // /campaigns/discover, /campaigns/recommendations, /campaigns/:id/details
+app.use('/api/v1', applicationRoutes);         // /campaigns/:id/apply, /campaigns/:id/applications, /applications/...
+app.use('/api/v1', reportRoutes);              // /campaigns/:id/report, /reports/...
+app.use('/api/v1/favorites',            favoriteRoutes);
+app.use('/api/v1/creator/preferences',  creatorPreferencesRoutes);
+app.use('/api/v1/notifications',        notificationRoutes);
 
 // Campaign budget routes
 // ⚠️ لازم تجي قبل /api/v1/campaigns العامة

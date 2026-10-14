@@ -75,6 +75,11 @@ async function createCampaign(
       materials: uploadedMaterials,
       startDate: campaignData.startDate || null,
       endDate: campaignData.endDate || null,
+      maxApplicants: campaignData.maxApplicants || null,
+      requirements: {
+        minFollowers: campaignData.requirements?.minFollowers ?? null,
+        minRating: campaignData.requirements?.minRating ?? null,
+      },
       halalDeclaration: {
         ...campaignData.halalDeclaration,
         declaredBy: advertiserId,

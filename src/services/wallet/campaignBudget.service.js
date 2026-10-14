@@ -15,6 +15,7 @@ const {
   PAUSE_REASON,
   CAMPAIGN_ACTION,
 } = require('../../constants/campaign.constants');
+const { isCampaignSuspended } = require('../../utils/campaign/campaignStatus.utils');
 const { sendBudgetExhaustedEmail } = require('../emailService');
 
 // ----------------------
@@ -39,6 +40,17 @@ const getWalletAndVerifyBalance = async (advertiserId, amount, session) => {
 };
 
 // ----------------------
+// [Sprint 4] Helper: الحملة الملغاة (بقرار إشراف) لا تقبل أي عملية ميزانية
+// ----------------------
+const assertCampaignNotCancelled = (campaign) => {
+  if (campaign.status === CAMPAIGN_STATUS.CANCELLED) {
+    const error = new Error('This campaign has been cancelled and can no longer be modified');
+    error.code = 'CAMPAIGN_UNAVAILABLE';
+    throw error;
+  }
+};
+
+// ----------------------
 // 1. تخصيص أو تحديث ميزانية الحملة
 // ----------------------
 const allocateBudget = async (campaignId, advertiserId, amount) => {
@@ -54,22 +66,34 @@ const allocateBudget = async (campaignId, advertiserId, amount) => {
       throw error;
     }
 
-    const wallet = await getWalletAndVerifyBalance(advertiserId, amount, session);
+    // [Sprint 4]
+    assertCampaignNotCancelled(campaign);
 
-    // حساب الفرق إذا كانت هناك ميزانية موجودة مسبقاً
-    const previousBudget = campaign.totalBudget || 0;
+    // [Funding fix] حملة بلا walletId = لم يُخصم لها شيء من المحفظة بعد.
+    // totalBudget الذي ضُبط عند الإنشاء مجرد "ميزانية مطلوبة" وليس مموّلاً،
+    // لذلك نعتبر الميزانية السابقة صفراً ونخصم المبلغ كاملاً من المحفظة.
+    const isFunded = !!campaign.walletId;
+    const previousBudget = isFunded ? campaign.totalBudget || 0 : 0;
     const difference = amount - previousBudget;
+
+    // لا نسمح بتخفيض الميزانية تحت ما أُنفق فعلاً
+    if (amount < (campaign.budgetSpent || 0)) {
+      const error = new Error('Budget cannot be lower than the amount already spent');
+      error.code = 'VALIDATION_ERROR';
+      throw error;
+    }
+
+    // الرصيد المطلوب هو الفرق فقط (وليس المبلغ كاملاً)
+    const wallet = await getWalletAndVerifyBalance(
+      advertiserId,
+      Math.max(difference, 0),
+      session
+    );
 
     // إذا كانت الميزانية الجديدة أقل من السابقة → نعيد الفرق للمحفظة
     // إذا كانت أكبر → نخصم الفرق من المحفظة
     if (difference > 0) {
-      // تحقق إضافي: هل الفرق المطلوب متاح في المحفظة
-      if (wallet.balance < difference) {
-        const error = new Error('Insufficient wallet balance');
-        error.code = 'INSUFFICIENT_BALANCE';
-        throw error;
-      }
-
+      // (فحص الرصيد للفرق تم أعلاه عبر getWalletAndVerifyBalance)
       await Wallet.findByIdAndUpdate(
         wallet._id,
         { $inc: { balance: -difference } },
@@ -89,7 +113,7 @@ const allocateBudget = async (campaignId, advertiserId, amount) => {
       campaignId,
       {
         totalBudget: amount,
-        remainingBudget: campaign.remainingBudget + difference,
+        remainingBudget: isFunded ? campaign.remainingBudget + difference : amount,
         walletId: wallet._id,
       },
       { session }
@@ -186,6 +210,19 @@ const rechargeCampaign = async (campaignId, advertiserId, amount) => {
     if (!campaign) {
       const error = new Error('Campaign not found');
       error.code = 'NOT_FOUND';
+      throw error;
+    }
+
+    // [Sprint 4] الشحن على حملة موقوفة بسبب بلاغ مسموح، على ملغاة ممنوع
+    assertCampaignNotCancelled(campaign);
+
+    // [Funding fix] لا شحن لحملة لم تُموَّل بعد: ميزانيتها الأولى لم تُخصم من المحفظة،
+    // والشحن عليها كان سيُبقي المبلغ الأولي "وهمياً". يجب استدعاء allocateBudget أولاً.
+    if (!campaign.walletId) {
+      const error = new Error(
+        'Allocate a budget to this campaign first, then you can recharge it'
+      );
+      error.code = 'VALIDATION_ERROR';
       throw error;
     }
 
@@ -297,6 +334,14 @@ const pauseCampaign = async (campaignId, advertiserId) => {
     throw error;
   }
 
+  // [Sprint 4] الإيقاف اليدوي مسموح فقط للحملات النشطة
+  // (كان ممكناً إيقاف حملة CANCELLED أو COMPLETED ثم استئنافها لتصبح ACTIVE)
+  if (campaign.status !== CAMPAIGN_STATUS.ACTIVE) {
+    const error = new Error('Only active campaigns can be paused');
+    error.code = 'VALIDATION_ERROR';
+    throw error;
+  }
+
   await Campaign.findByIdAndUpdate(campaignId, {
     status: CAMPAIGN_STATUS.MANUALLY_PAUSED,
     pauseReason: PAUSE_REASON.MANUAL,
@@ -325,6 +370,17 @@ const resumeCampaign = async (campaignId, advertiserId) => {
   if (!campaign) {
     const error = new Error('Campaign not found');
     error.code = 'NOT_FOUND';
+    throw error;
+  }
+
+  // [Sprint 4] ملغاة → لا استئناف. موقوفة بسبب بلاغ → لا استئناف حتى قرار المراجعة
+  assertCampaignNotCancelled(campaign);
+
+  if (isCampaignSuspended(campaign)) {
+    const error = new Error(
+      'This campaign is under review after a report and cannot be resumed yet'
+    );
+    error.code = 'CAMPAIGN_SUSPENDED';
     throw error;
   }
 
@@ -383,6 +439,79 @@ const setAutoResume = async (campaignId, advertiserId, autoResumeOnRecharge) => 
   };
 };
 
+// ----------------------
+// 7. [Sprint 4] إرجاع الميزانية غير المصروفة للمحفظة (عند إلغاء حملة بسبب مخالفة)
+// ----------------------
+/**
+ * ⚠️ لازم تُستدعى داخل transaction يملكها المستدعي (report.service.reviewReport):
+ *    const session = await mongoose.startSession(); session.startTransaction(); ...
+ *
+ * آمنة بفضل Funding fix: الحملة التي لها walletId خُصمت ميزانيتها فعلاً من المحفظة،
+ * أما الحملة بلا walletId فلا يُرجَع لها شيء (لم يُخصم شيء أصلاً).
+ *
+ * لا تغيّر status ولا تسجّل في ActivityLog (المستدعي يفعل ذلك).
+ * totalBudget تبقى كما هي (سجل تاريخي)، و remainingBudget تصبح 0.
+ *
+ * @param {string|ObjectId} campaignId
+ * @param {ClientSession} session
+ * @returns {Promise<{ amount: number, walletBalanceAfter: number, transactionId: ObjectId } | null>}
+ *          null إذا لا يوجد ما يُرجَع
+ */
+const releaseCampaignBudget = async (campaignId, session) => {
+  const campaign = await Campaign.findById(campaignId).session(session);
+
+  if (!campaign) {
+    const error = new Error('Campaign not found');
+    error.code = 'NOT_FOUND';
+    throw error;
+  }
+
+  const amount = campaign.walletId ? campaign.remainingBudget || 0 : 0;
+  if (amount <= 0) return null;
+
+  const wallet = await Wallet.findByIdAndUpdate(
+    campaign.walletId,
+    { $inc: { balance: amount } },
+    { session, returnDocument: 'after' }
+  );
+
+  if (!wallet) {
+    const error = new Error('Wallet not found');
+    error.code = 'NOT_FOUND';
+    throw error;
+  }
+
+  await Campaign.findByIdAndUpdate(
+    campaignId,
+    { $set: { remainingBudget: 0 } },
+    { session }
+  );
+
+  const transaction = await Transaction.create(
+    [
+      {
+        walletId: wallet._id,
+        type: TRANSACTION_TYPE.CREDIT,
+        grossAmount: amount,
+        commission: 0,
+        netAmount: amount,
+        currency: 'USD',
+        paymentMethod: null,
+        status: TRANSACTION_STATUS.COMPLETED,
+        description: `Budget returned from cancelled campaign: ${campaign.name}`,
+        campaignId,
+      },
+    ],
+    { session }
+  );
+
+  return {
+    amount,
+    walletBalanceAfter: wallet.balance,
+    transactionId: transaction[0]._id,
+  };
+};
+
 module.exports = {
   allocateBudget,
   setDailyBudgetLimit,
@@ -390,4 +519,5 @@ module.exports = {
   pauseCampaign,
   resumeCampaign,
   setAutoResume,
+  releaseCampaignBudget,
 };
