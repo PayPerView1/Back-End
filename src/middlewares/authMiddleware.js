@@ -51,3 +51,18 @@ exports.protect = async (req, res, next) => {
     });
   }
 };
+
+// يضع req.user إن وُجد توكن صالح، وإلا يكمل كزائر بدون رفض الطلب
+exports.optionalAuth = async (req, res, next) => {
+  const header = req.headers.authorization;
+  if (!header || !header.startsWith('Bearer')) return next();
+
+  try {
+    const decoded = jwt.verify(header.split(' ')[1], process.env.JWT_SECRET);
+    const user = await User.findById(decoded.id);
+    if (user) req.user = user;
+  } catch (error) {
+    // توكن منتهٍ أو غير صالح → يُعامل كزائر
+  }
+  next();
+};

@@ -1,12 +1,16 @@
 // src/services/campaign/campaignDraft.service.js
 const CampaignDraft = require('../../models/CampaignDraft');
 const User = require('../../models/user');
-const sendEmail = require('../emailService');
+const { sendEmail } = require('../emailService');
 const { deleteFilesFromStorage } = require('./fileUpload.service');
 const { logActivity } = require('./activityLog.service');
 const { createCampaign, submitCampaignForReview } = require('./campaignCreation.service');
 const { CAMPAIGN_ACTION, CAMPAIGN_STATUS } = require('../../constants/campaign.constants');
-
+   const DRAFT_UPDATABLE_FIELDS = [
+     'name', 'contentType', 'category', 'subCategories', 'totalBudget', 'cpm',
+     'dailyBudgetLimit', 'brief', 'targetCountries', 'halalDeclared',
+     'startDate', 'endDate', 'maxApplicants', 'requirements',
+   ];
 // ============================================
 // 6.1.1 — إنشاء مسودة جديدة
 // ============================================
@@ -29,6 +33,8 @@ async function createDraft(advertiserId, draftData) {
     targetCountries: draftData.targetCountries || [],
     halalDeclared: draftData.halalDeclared || false,
     copyInfo: draftData.copyInfo || {},
+    maxApplicants: draftData.maxApplicants || null,
+    requirements: draftData.requirements || {},
     materials: draftData.materials || [],
     startDate: draftData.startDate || null,
     endDate: draftData.endDate || null,
@@ -93,18 +99,7 @@ async function updateDraft(draft, updateData) {
   }
 
   // بنحدث بس الحقول المرسلة فعليًا (نفس فلسفة updateProfile بالبروفايل)
-  const allowedFields = [
-    'name',
-    'contentType',
-    'category',
-    'subCategories',
-    'totalBudget',
-    'cpm',
-    'dailyBudgetLimit',
-    'brief',
-    'targetCountries',
-    'halalDeclared',
-  ];
+const allowedFields = DRAFT_UPDATABLE_FIELDS;
 
   allowedFields.forEach((field) => {
     if (updateData[field] !== undefined) {
@@ -147,18 +142,13 @@ async function autoSaveDraft(draft, updateData, clientVersion) {
     throw error;
   }
 
-  const allowedFields = [
-    'name',
-    'contentType',
-    'category',
-    'subCategories',
-    'totalBudget',
-    'cpm',
-    'dailyBudgetLimit',
-    'brief',
-    'targetCountries',
-    'halalDeclared',
-  ];
+  const allowedFields = DRAFT_UPDATABLE_FIELDS;
+
+  allowedFields.forEach((field) => {
+    if (updateData[field] !== undefined) {
+      draft[field] = updateData[field];
+    }
+  });
 
   allowedFields.forEach((field) => {
     if (updateData[field] !== undefined) {

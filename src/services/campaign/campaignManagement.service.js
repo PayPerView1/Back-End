@@ -232,6 +232,12 @@ const copyCampaign = async (campaignId, advertiserId, options = {}) => {
     cpm:            original.cpm,
     dailyBudgetLimit: original.dailyBudgetLimit,
     brief:          original.brief,
+    // For Sprint 4
+    maxApplicants: original.maxApplicants,
+    requirements: {
+      minFollowers: original.requirements?.minFollowers ?? null,
+      minRating: original.requirements?.minRating ?? null,
+    },
     copyInfo: { isCopy: true, copiedFromId: original._id },
     // إعلان الحلال — نرجع للـ false لأن المعلن يجب أن يُعلن من جديد
     halalDeclared:  false,

@@ -269,6 +269,22 @@ const campaignSchema = new mongoose.Schema(
     completedAt:  { type: Date, default: null },
     startDate:    {type: Date,default: null,},
     endDate:      {type: Date,default: null,},
+        // ===== Sprint 4 — Discovery, Moderation & Applications =====
+    isSuspended:      { type: Boolean, default: false },
+    suspensionReason: { type: String, default: null },
+    suspendedAt:      { type: Date, default: null },
+    applicantsCount:  { type: Number, default: 0, min: 0 },
+    maxApplicants:    { type: Number, default: null, min: 1 }, // null = بلا حد
+    requirements: {
+      type: new mongoose.Schema(
+        {
+          minFollowers: { type: Number, default: null, min: 0 },
+          minRating:    { type: Number, default: null, min: 0, max: 5 },
+        },
+        { _id: false }
+      ),
+      default: () => ({}),
+    },
   },
   {
     timestamps: true, // يضيف createdAt و updatedAt تلقائياً
@@ -282,6 +298,11 @@ campaignSchema.index({ advertiserId: 1, status: 1 });
 campaignSchema.index({ advertiserId: 1, createdAt: -1 });
 campaignSchema.index({ advertiserId: 1, isArchived: 1 });
 campaignSchema.index({ name: 'text' }); // للبحث النصي
+// sprint4 indexes
+campaignSchema.index({ status: 1, isSuspended: 1, isArchived: 1, createdAt: -1 });
+campaignSchema.index({ targetCountries: 1 });
+campaignSchema.index({ cpm: -1 });
+campaignSchema.index({ endDate: 1 });
 
 // ----------------------
 // Validation: subCategories مطلوبة إذا كان contentType = MIXED

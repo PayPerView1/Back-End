@@ -1,19 +1,19 @@
 // src/controllers/wallet/campaignBudget.controller.js
 
 const campaignBudgetService = require('../../services/wallet/campaignBudget.service');
-
+const { getStatusFromCode } = require('../../utils/errors');
 // ----------------------
 // Helper: تحويل error.code لـ HTTP status
 // ----------------------
-const getStatusFromCode = (code) => {
-  switch (code) {
-    case 'NOT_FOUND':            return 404;
-    case 'FORBIDDEN':            return 403;
-    case 'INSUFFICIENT_BALANCE': return 400;
-    case 'VALIDATION_ERROR':     return 400;
-    default:                     return 500;
-  }
-};
+// const getStatusFromCode = (code) => {
+//   switch (code) {
+//     case 'NOT_FOUND':            return 404;
+//     case 'FORBIDDEN':            return 403;
+//     case 'INSUFFICIENT_BALANCE': return 400;
+//     case 'VALIDATION_ERROR':     return 400;
+//     default:                     return 500;
+//   }
+// };
 
 // ============================================
 // PUT /api/v1/campaigns/:campaignId/budget
