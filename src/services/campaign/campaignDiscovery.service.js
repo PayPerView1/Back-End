@@ -1,12 +1,14 @@
 // src/services/campaign/campaignDiscovery.service.js
-// المالك: الشخص B — منطق الاكتشاف والتفاصيل والتوصيات.
-// المرجع: API_CONTRACT_Sprint4.md §1, §2.1
+// المالك: الشخص B — منطق الاكتشاف والتفاصيل.
+// المرجع: API_CONTRACT_Sprint4.md §1
+//
+// التوصيات (recommendations) انتقلت إلى campaignRecommendation.service.js.
 
-const mongoose = require('mongoose');
 const Campaign = require('../../models/campaign');
 const User = require('../../models/user');
 const Favorite = require('../../models/favorite');
 const Application = require('../../models/application');
+const CreatorPreferences = require('../../models/creatorPreferences');
 const { AppError } = require('../../utils/errors');
 const { parsePagination, buildPageMeta } = require('../../utils/paginate.utils');
 const {
@@ -16,16 +18,15 @@ const {
 } = require('../../utils/campaign/campaignVisibility.utils');
 const { toPreviewMaterial } = require('../../utils/campaign/materialPreview.utils');
 const { normalizeCountryList } = require('../../utils/countries.utils');
+const { computeMatchScore } = require('../../utils/campaign/matchScore.utils');
 const { APPLICATION_STATUS, DISCOVER_SORT } = require('../../constants/discovery.constants');
 
 // ============================================
 // Helpers
 // ============================================
 
-/** يهرّب الأحرف الخاصة في regex */
 const escapeRegex = (str = '') => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-/** يبني شرط المحتوى (contentType أو subCategories) */
 const buildContentTypeFilter = (contentType) => ({
   $or: [{ contentType }, { subCategories: contentType }],
 });
@@ -33,10 +34,6 @@ const buildContentTypeFilter = (contentType) => ({
 // ============================================
 // 1. Discover — GET /campaigns/discover
 // ============================================
-/**
- * @param {string} creatorId
- * @param {Object} filters — validated query من validator
- */
 const getDiscoverCampaigns = async (creatorId, filters = {}) => {
   const { page, perPage, skip } = parsePagination(filters, {
     defaultPerPage: 20,
@@ -52,15 +49,12 @@ const getDiscoverCampaigns = async (creatorId, filters = {}) => {
     sort = DISCOVER_SORT.NEWEST,
   } = filters;
 
-  // 1. Base filter: الحملات الظاهرة
   const query = buildVisibleCampaignFilter();
 
-  // 2. contentType (يطابق contentType أو subCategories)
   if (contentType) {
     Object.assign(query, buildContentTypeFilter(contentType));
   }
 
-  // 3. countries — تُطبَّع من string إلى array alpha-3
   if (countriesRaw) {
     const raw = String(countriesRaw)
       .split(',')
@@ -70,7 +64,6 @@ const getDiscoverCampaigns = async (creatorId, filters = {}) => {
     if (valid.length > 0) {
       query.targetCountries = { $in: valid };
     } else {
-      // لا دول صالحة → نتيجة فاضية
       return {
         data: [],
         pagination: buildPageMeta(0, page, perPage),
@@ -78,14 +71,12 @@ const getDiscoverCampaigns = async (creatorId, filters = {}) => {
     }
   }
 
-  // 4. CPM range
   if (minCpm != null || maxCpm != null) {
     query.cpm = {};
     if (minCpm != null) query.cpm.$gte = minCpm;
     if (maxCpm != null) query.cpm.$lte = maxCpm;
   }
 
-  // 5. search — اسم الحملة أو اسم المعلن
   if (search && search.trim()) {
     const safe = escapeRegex(search.trim());
     const regex = new RegExp(safe, 'i');
@@ -106,13 +97,12 @@ const getDiscoverCampaigns = async (creatorId, filters = {}) => {
     query.$and.push({ $or: searchOr });
   }
 
-  // 6. Sorting
+  // Sorting — bestMatch يُعالج في الذاكرة بعد الاستعلام
+  const isBestMatch = sort === DISCOVER_SORT.BEST_MATCH;
   let sortObj = { createdAt: -1 };
   if (sort === DISCOVER_SORT.HIGHEST_CPM) sortObj = { cpm: -1, createdAt: -1 };
   else if (sort === DISCOVER_SORT.ENDING_SOON) sortObj = { endDate: 1, createdAt: -1 };
-  // NEWEST و BEST_MATCH (مؤقتاً) → createdAt: -1
 
-  // 7. Query — قائمة الحملات
   const [campaigns, total] = await Promise.all([
     Campaign.find(query)
       .sort(sortObj)
@@ -131,7 +121,60 @@ const getDiscoverCampaigns = async (creatorId, filters = {}) => {
     };
   }
 
-  // 8. إثراء: isFavorited + applicationStatus
+  // Best Match — حساب score وترتيب في الذاكرة
+  let orderedCampaigns = campaigns;
+  let matchScores = null;
+
+  if (isBestMatch) {
+    const [preferencesDoc, previousApps] = await Promise.all([
+      CreatorPreferences.findOne({ creatorId }).lean(),
+      Application.find({
+        creatorId,
+        status: { $in: [APPLICATION_STATUS.PENDING, APPLICATION_STATUS.ACCEPTED] },
+      })
+        .populate('campaignId', 'contentType subCategories')
+        .select('campaignId')
+        .lean(),
+    ]);
+
+    const preferences = preferencesDoc
+      ? {
+          preferredContentTypes: preferencesDoc.preferredContentTypes || [],
+          preferredCountries: preferencesDoc.preferredCountries || [],
+          minCpm: preferencesDoc.minCpm || 0,
+        }
+      : null;
+
+    const previousContentTypes = new Set();
+    previousApps.forEach((a) => {
+      const c = a.campaignId;
+      if (!c) return;
+      if (c.contentType) previousContentTypes.add(c.contentType);
+      if (Array.isArray(c.subCategories)) {
+        c.subCategories.forEach((sc) => previousContentTypes.add(sc));
+      }
+    });
+
+    const scoreMap = new Map();
+    campaigns.forEach((c) => {
+      const { score, reasons } = computeMatchScore(c, {
+        preferences,
+        previousContentTypes: Array.from(previousContentTypes),
+      });
+      scoreMap.set(c._id.toString(), { score, reasons });
+    });
+
+    orderedCampaigns = [...campaigns].sort((a, b) => {
+      const sa = scoreMap.get(a._id.toString())?.score || 0;
+      const sb = scoreMap.get(b._id.toString())?.score || 0;
+      if (sb !== sa) return sb - sa;
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
+
+    matchScores = scoreMap;
+  }
+
+  // إثراء: isFavorited + applicationStatus
   const campaignIds = campaigns.map((c) => c._id);
   const [favorites, applications] = await Promise.all([
     Favorite.find({ creatorId, campaignId: { $in: campaignIds } })
@@ -150,13 +193,14 @@ const getDiscoverCampaigns = async (creatorId, filters = {}) => {
     appStatusMap.set(a.campaignId.toString(), status);
   });
 
-  // 9. بناء الاستجابة
-  const data = campaigns.map((c) => {
+  const data = orderedCampaigns.map((c) => {
     const availability = getAvailability(c);
     const unavailableReason =
       availability === 'UNAVAILABLE' && (c.remainingBudget || 0) <= 0
         ? 'BUDGET_EXHAUSTED'
         : null;
+
+    const matched = matchScores ? matchScores.get(c._id.toString()) : null;
 
     return {
       id: c._id,
@@ -180,6 +224,10 @@ const getDiscoverCampaigns = async (creatorId, filters = {}) => {
       isFavorited: favoritedSet.has(c._id.toString()),
       applicationStatus: appStatusMap.get(c._id.toString()) || null,
       createdAt: c.createdAt,
+      ...(matched && {
+        matchScore: matched.score,
+        reasons: matched.reasons,
+      }),
     };
   });
 
@@ -237,7 +285,6 @@ const getCampaignDetails = async (campaignId, creatorId) => {
     throw new AppError('Campaign not found', 'NOT_FOUND');
   }
 
-  // application الخاص بالمبدع
   const application = await Application.findOne({
     campaignId: campaign._id,
     creatorId,
@@ -250,7 +297,6 @@ const getCampaignDetails = async (campaignId, creatorId) => {
       ? null
       : application?.status || null;
 
-  // favoriteId
   const favorite = await Favorite.findOne({
     campaignId: campaign._id,
     creatorId,
@@ -258,13 +304,11 @@ const getCampaignDetails = async (campaignId, creatorId) => {
     .select('_id')
     .lean();
 
-  // canApply + applyBlockedReason
   const availability = getAvailability(campaign);
   let canApply = true;
   let applyBlockedReason = null;
 
   if (!application || appStatus === null) {
-    // لا يوجد تقديم → نفحص
     if (availability === 'UNAVAILABLE') {
       canApply = false;
       applyBlockedReason = 'CAMPAIGN_UNAVAILABLE';
@@ -275,16 +319,12 @@ const getCampaignDetails = async (campaignId, creatorId) => {
       canApply = false;
       applyBlockedReason = 'APPLICANT_LIMIT_REACHED';
     }
-    // requirements not enforced yet (Known Limitations)
   } else {
-    // يوجد تقديم ساري
     canApply = false;
     applyBlockedReason = 'ALREADY_APPLIED';
   }
 
   const canDownloadMaterials = appStatus === APPLICATION_STATUS.ACCEPTED;
-
-  // materials → previewUrl فقط
   const materials = (campaign.materials || []).map(toPreviewMaterial);
 
   return {
@@ -329,80 +369,8 @@ const getCampaignDetails = async (campaignId, creatorId) => {
   };
 };
 
-// ============================================
-// 4. Recommendations — GET /campaigns/recommendations
-// ============================================
-/**
- * ⚠️ مؤقتاً يعمل كـ newest حتى إكمال B3 (matchScore).
- */
-const getRecommendations = async (creatorId, limit = 10) => {
-  // استثناء الحملات التي قدّم عليها المبدع
-  const appliedCampaignIds = await Application.find({ creatorId })
-    .select('campaignId')
-    .lean();
-
-  const excludedIds = appliedCampaignIds.map((a) => a.campaignId);
-
-  const query = buildVisibleCampaignFilter();
-  if (excludedIds.length > 0) {
-    query._id = { $nin: excludedIds };
-  }
-
-  const campaigns = await Campaign.find(query)
-    .sort({ createdAt: -1 })
-    .limit(limit)
-    .populate('advertiserId', 'fullName profilePicture')
-    .select('-materials -brief -aiReview -halalDeclaration -stats')
-    .lean();
-
-  if (campaigns.length === 0) {
-    return { data: [], meta: { hasPreferences: false } };
-  }
-
-  const campaignIds = campaigns.map((c) => c._id);
-
-  const favorites = await Favorite.find({
-    creatorId,
-    campaignId: { $in: campaignIds },
-  })
-    .select('campaignId')
-    .lean();
-
-  const favoritedSet = new Set(favorites.map((f) => f.campaignId.toString()));
-
-  const data = campaigns.map((c) => {
-    const availability = getAvailability(c);
-    return {
-      id: c._id,
-      name: c.name,
-      brand: c.advertiserId
-        ? {
-            id: c.advertiserId._id,
-            name: c.advertiserId.fullName,
-            logo: c.advertiserId.profilePicture || null,
-          }
-        : null,
-      contentType: c.contentType,
-      cpm: c.cpm,
-      remainingBudget: c.remainingBudget,
-      targetCountries: c.targetCountries,
-      isHalalVerified: true,
-      availability,
-      isFavorited: favoritedSet.has(c._id.toString()),
-      matchScore: 0,
-      reasons: [],
-    };
-  });
-
-  return {
-    data,
-    meta: { hasPreferences: false }, // مؤقتاً — يتغير في B3
-  };
-};
-
 module.exports = {
   getDiscoverCampaigns,
   getSuggestions,
   getCampaignDetails,
-  getRecommendations,
 };

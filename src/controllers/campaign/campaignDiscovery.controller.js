@@ -1,7 +1,10 @@
 // src/controllers/campaign/campaignDiscovery.controller.js
 // المالك: الشخص B — HTTP handlers لـ endpoints الاكتشاف والتفاصيل.
+//
+// التوصيات (recommendations) انتقلت إلى campaignRecommendation.service.js.
 
 const campaignDiscoveryService = require('../../services/campaign/campaignDiscovery.service');
+const campaignRecommendationService = require('../../services/campaign/campaignRecommendation.service');
 const { sendError } = require('../../utils/errors');
 
 // ============================================
@@ -68,7 +71,7 @@ const getDetails = async (req, res) => {
 const recommendations = async (req, res) => {
   try {
     const { limit } = req.validated?.query || req.query;
-    const { data, meta } = await campaignDiscoveryService.getRecommendations(
+    const { data, meta } = await campaignRecommendationService.getRecommendations(
       req.user._id,
       limit
     );
