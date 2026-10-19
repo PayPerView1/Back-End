@@ -3,7 +3,7 @@ const cron = require('node-cron');
 const Campaign = require('../models/campaign');
 const { logActivity } = require('../services/campaign/activityLog.service');
 const { CAMPAIGN_ACTION, CAMPAIGN_STATUS } = require('../constants/campaign.constants');
-
+const { notifyFavoritersCampaignUnavailable } = require('../services/creator/favoriteNotifications.service');
 // Schedule to run daily at midnight
 const CRON_SCHEDULE = '0 0 * * *';
 
@@ -43,6 +43,13 @@ function startCampaignExpiryJob() {
             null,
             { endDate: campaign.endDate }
           );
+
+          // Notify favoriters
+         try {
+            await notifyFavoritersCampaignUnavailable(campaign._id, campaign.name, 'ENDED');
+          } catch (error) {
+            console.error(`[campaignExpiry.job] Failed to notify favoriters: ${error.message}`);
+          }
 
           expiredCount++;
         } catch (error) {

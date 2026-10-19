@@ -28,7 +28,7 @@ const calculateFreeBalance = async (walletId) => {
 
 // الميزانيات المخصصة للحملات خُصمت من wallet.balance أصلًا (allocateBudget / rechargeCampaign)，
 // فالرصيد الحر هو رصيد المحفظة الحالي نفسه. reservedBalance للعرض فقط.
-const freeBalance = Math.max(0, wallet.balance);
+const freeBalance = Math.max(0, wallet.balance - reservedBalance);
 
   return {
     freeBalance,
