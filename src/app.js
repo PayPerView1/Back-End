@@ -18,6 +18,7 @@ const walletFundingRoutes      = require('./routes/wallet/walletFunding.routes')
 const transactionHistoryRoutes = require('./routes/wallet/transactionHistory.routes');
 const walletRefundRoutes       = require('./routes/wallet/walletRefund.routes');
 const campaignBudgetRoutes     = require('./routes/wallet/campaignBudget.routes');
+const walletAdminRoutes        = require('./routes/admin/walletAdmin.routes');
 // Sprint 4 imports
 const campaignDiscoveryRoutes  = require('./routes/campaign/campaignDiscovery.routes');
 const applicationRoutes        = require('./routes/application/application.routes');
@@ -54,21 +55,21 @@ app.get('/', (req, res) => {
 // ربط المسارات
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/profile', profileRoutes);
-// Wallet routes
+// Wallet routes — كل router يُركَّب مرة واحدة فقط
+// (transactions أولاً لأنها أكثر تحديداً من /api/v1/wallet)
 app.use('/api/v1/wallet/transactions', transactionHistoryRoutes);
-app.use('/api/v1/wallet/refund',       walletRefundRoutes);
-app.use('/api/v1/wallet/refunds',      walletRefundRoutes);
-app.use('/api/v1/wallet',              walletFundingRoutes);
+app.use('/api/v1/wallet', walletRefundRoutes);   // /refund, /refund/:id, /refunds
+app.use('/api/v1/wallet', walletFundingRoutes); // /, /fund, /bank-details, webhooks, ...
 
-// Admin wallet routes
-app.use('/api/v1/admin/wallet/bank-transfer', walletFundingRoutes);
-app.use('/api/v1/admin/wallet/refund',        walletRefundRoutes);
+// Admin wallet routes: PUT /bank-transfer/:id و PUT /refund/:id
+// (بادئة /admin مجرد تنظيم للمسارات؛ الحماية الفعلية adminOnly داخل الـ router)
+app.use('/api/v1/admin/wallet', walletAdminRoutes);
 
 // ═══════════════════════════════════════════════════════════════
 // Sprint 4 — Discovery, Applications, Reports, Favorites, Notifications
-// ⚠️ لازم تجي قبل campaignBudgetRoutes: ذاك الـ router مركَّب على
-//    /api/v1/campaigns/:campaignId وفيه router.use(protect, requireBrandRole)،
-//    فأي طلب من مبدع (أو زائر) يمر عليه أولاً ويأخذ 401/403.
+// ⚠️ لازم تجي قبل campaignCreationRoutes و campaignManagementRoutes (وأي router مركَّب
+//    على /api/v1/campaigns وفيه router.use(protect, requireBrandRole))، فأي طلب من مبدع
+//    (أو زائر) على /campaigns/... يمر عليها أولاً ويأخذ 401/403.
 //
 // قاعدتان:
 //  1) router يمتد على أكثر من بادئة (discovery / applications / reports):
@@ -80,14 +81,14 @@ app.use('/api/v1/admin/wallet/refund',        walletRefundRoutes);
 app.use('/api/v1', campaignDiscoveryRoutes);   // /campaigns/discover, /campaigns/recommendations, /campaigns/:id/details
 app.use('/api/v1', applicationRoutes);         // /campaigns/:id/apply, /campaigns/:id/applications, /applications/...
 app.use('/api/v1', reportRoutes);              // /campaigns/:id/report, /reports/...
-app.use('/api/v1/favorites',            favoriteRoutes);
-app.use('/api/v1/creator/preferences',  creatorPreferencesRoutes);
-app.use('/api/v1/notifications',        notificationRoutes);
+app.use('/api/v1/favorites', favoriteRoutes);
+app.use('/api/v1/creator/preferences',creatorPreferencesRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
 
 // Campaign budget routes
-// ⚠️ لازم تجي قبل /api/v1/campaigns العامة
-// عشان /:campaignId ما يلتقطها قبل budget routes
-app.use('/api/v1/campaigns/:campaignId', campaignBudgetRoutes);
+// مركَّب على /api/v1/campaigns ومساراته /:campaignId/budget ... (الـ middleware على كل route)
+// ولا يوجد فيه router.use عام، فلا يعترض طلبات غيره ولا يكرر protect.
+app.use('/api/v1/campaigns', campaignBudgetRoutes);
 // ⚠️ ملاحظة مهمة: /drafts لازم تترط قبل /campaigns العامة (نفس مبدأ "الروابط
 // الثابتة أولاً" المذكور بالخطة) — عشان أي توسعة لاحقة (مثلاً /:campaignId من
 // campaignManagement.routes تبع الشخص الثاني) ما تتعارض أو تسبق مسارات /drafts

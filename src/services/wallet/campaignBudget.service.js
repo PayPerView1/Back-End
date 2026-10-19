@@ -17,7 +17,7 @@ const {
 } = require('../../constants/campaign.constants');
 const { isCampaignSuspended } = require('../../utils/campaign/campaignStatus.utils');
 const { sendBudgetExhaustedEmail } = require('../emailService');
-
+const { notifyFavoritersCampaignUnavailable } = require('../creator/favoriteNotifications.service');
 // ----------------------
 // Helper: جلب المحفظة والتحقق من الرصيد
 // ----------------------
@@ -352,6 +352,12 @@ const pauseCampaign = async (campaignId, advertiserId) => {
     action: CAMPAIGN_ACTION.MANUALLY_PAUSED,
     performedBy: advertiserId,
   });
+  // Notify favoriters
+  try {
+  await notifyFavoritersCampaignUnavailable(campaignId, campaign.name, 'NOT_AVAILABLE');
+  } catch (error) {
+  console.error(`[campaignBudget.service] Failed to notify favoriters: ${error.message}`);
+  }
 
   return {
     campaignId,

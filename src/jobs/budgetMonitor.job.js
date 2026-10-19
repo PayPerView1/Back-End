@@ -6,6 +6,7 @@ const Campaign = require('../models/campaign');
 const CampaignActivityLog = require('../models/CampaignActivityLog');
 const { sendBudgetExhaustedEmail } = require('../services/emailService');
 const { CAMPAIGN_STATUS, PAUSE_REASON, CAMPAIGN_ACTION } = require('../constants/campaign.constants');
+const { notifyFavoritersCampaignUnavailable } = require('../services/creator/favoriteNotifications.service');
 
 // ----------------------
 // منطق المراقبة — مستقل عن الـ cron لتسهيل الاختبار
@@ -52,6 +53,12 @@ const runBudgetMonitor = async () => {
           campaignName: campaign.name,
           campaignId: campaign._id,
         });
+      }
+      // Notify favoriters
+      try {
+        await notifyFavoritersCampaignUnavailable(campaign._id, campaign.name, 'BUDGET_EXHAUSTED');
+      } catch (error) {
+        console.error(`[budgetMonitor] Failed to notify favoriters: ${error.message}`);
       }
 
       console.log(`[budgetMonitor] Paused campaign: ${campaign.name} (${campaign._id})`);

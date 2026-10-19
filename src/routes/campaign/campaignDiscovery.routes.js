@@ -8,9 +8,59 @@
 const express = require('express');
 const router = express.Router();
 
-// TODO(B): GET /campaigns/discover/suggestions
-// TODO(B): GET /campaigns/discover
-// TODO(B): GET /campaigns/recommendations
-// TODO(B): GET /campaigns/:campaignId/details
+const campaignDiscoveryController = require('../../controllers/campaign/campaignDiscovery.controller');
+const { protect } = require('../../middlewares/authMiddleware');
+const { requireClipperRole } = require('../../middlewares/campaign/campaignValidationMiddleware');
+const { validate } = require('../../middlewares/validate.middleware');
+const {
+  discoverQuerySchema,
+  suggestionsQuerySchema,
+  recommendationsQuerySchema,
+  campaignIdParamSchema,
+} = require('../../validators/campaign/campaignDiscovery.validator');
+
+// ─────────────────────────────────────────────
+// Static paths first
+// ─────────────────────────────────────────────
+
+// GET /campaigns/discover/suggestions
+router.get(
+  '/campaigns/discover/suggestions',
+  protect,
+  requireClipperRole,
+  validate({ query: suggestionsQuerySchema }),
+  campaignDiscoveryController.suggestions
+);
+
+// GET /campaigns/discover
+router.get(
+  '/campaigns/discover',
+  protect,
+  requireClipperRole,
+  validate({ query: discoverQuerySchema }),
+  campaignDiscoveryController.discover
+);
+
+// GET /campaigns/recommendations
+router.get(
+  '/campaigns/recommendations',
+  protect,
+  requireClipperRole,
+  validate({ query: recommendationsQuerySchema }),
+  campaignDiscoveryController.recommendations
+);
+
+// ─────────────────────────────────────────────
+// Parametric paths last
+// ─────────────────────────────────────────────
+
+// GET /campaigns/:campaignId/details
+router.get(
+  '/campaigns/:campaignId/details',
+  protect,
+  requireClipperRole,
+  validate({ params: campaignIdParamSchema }),
+  campaignDiscoveryController.getDetails
+);
 
 module.exports = router;

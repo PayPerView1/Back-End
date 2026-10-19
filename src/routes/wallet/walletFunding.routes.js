@@ -1,4 +1,7 @@
 // src/routes/wallet/walletFunding.routes.js
+//
+// يُركَّب في app.js مرة واحدة فقط:  app.use('/api/v1/wallet', walletFundingRoutes);
+// (مسار مراجعة التحويل البنكي للأدمن انتقل إلى admin/walletAdmin.routes.js)
 
 const express = require('express');
 const router  = express.Router();
@@ -11,16 +14,13 @@ const {
   handlePaypalWebhook,
   handleMoyasarWebhook,
   uploadBankTransferReceipt,
-  reviewBankTransfer,
 } = require('../../controllers/wallet/walletFunding.controller');
 
 const { protect }   = require('../../middlewares/authMiddleware');
-const adminOnly     = require('../../middlewares/adminOnly');
 const {
   validateFundingRequest,
   validateCapture,
   validateBankTransferUpload,
-  validateReview,
 } = require('../../middlewares/wallet/walletValidation.middleware');
 const uploadReceipt = require('../../middlewares/wallet/receiptUpload.middleware');
 
@@ -49,9 +49,10 @@ router.post('/paypal/capture', protect, validateCapture, capturePaypalOrder);
 // ----------------------------------------
 // Webhooks — بدون protect (البوابة تستدعيها مباشرة)
 // ⚠️ يجب ضبط express.raw على هذين المسارين في app.js
-//    قبل express.json، وإلا لن يعمل التحقق من التوقيع/التوكن:
-//    app.use('/api/v1/wallet/paypal/webhook',  express.raw({ type: '*/*' }));
-//    app.use('/api/v1/wallet/moyasar/webhook', express.raw({ type: '*/*' }));
+//    قبل express.json، وإلا لن يعمل التحقق من التوقيع/التوكن
+//    (الإعداد الحالي في app.js: express.raw({ type: 'application/json' })):
+//    app.use('/api/v1/wallet/paypal/webhook',  express.raw({ type: 'application/json' }));
+//    app.use('/api/v1/wallet/moyasar/webhook', express.raw({ type: 'application/json' }));
 // ----------------------------------------
 // POST /api/v1/wallet/paypal/webhook
 router.post('/paypal/webhook', handlePaypalWebhook);
@@ -68,21 +69,6 @@ router.post(
   uploadReceipt,
   validateBankTransferUpload,
   uploadBankTransferReceipt
-);
-
-// ----------------------------------------
-// PUT /bank-transfer/:id  (مراجعة الأدمن: APPROVE / REJECT)
-// ⚠️ المسار الفعلي يعتمد على مكان تركيب هذا الـ router في app.js:
-//    تحت /api/v1/wallet  → /api/v1/wallet/bank-transfer/:id
-//    تحت /api/v1/admin   → /api/v1/admin/bank-transfer/:id
-//    راجع app.js وتأكد أنه يطابق ما يستدعيه الفرونت.
-// ----------------------------------------
-router.put(
-  '/bank-transfer/:id',
-  protect,
-  adminOnly,
-  validateReview,
-  reviewBankTransfer
 );
 
 module.exports = router;
