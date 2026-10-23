@@ -1,3 +1,4 @@
+// src/models/CampaignActivityLog.js
 const mongoose = require('mongoose');
 const { CAMPAIGN_ACTION } = require('../constants/campaign.constants');
 

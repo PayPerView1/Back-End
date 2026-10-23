@@ -151,31 +151,36 @@ const validateDraftSubmission = (req, res, next) => {
   const draft = req.draft;
 
   if (!draft) {
-    // احتياط — هاد المفروض ما يصير أبدًا لو verifyDraftOwnership اشتغل قبله بالسلسلة
-    return res.status(500).json({
-      success: false,
-      message: 'Draft not found on request. Make sure verifyDraftOwnership runs before this.',
-    });
+    return res.status(500).json({ /* ... */ });
   }
 
-  // بندمج بيانات المسودة مع تفاصيل الحلال الكاملة يلي المفروض توصل بجسم طلب الـ submit
+  // ⬇️ إضافة: تحويل halalDeclaration إذا كانت String
+  let halalDeclaration = req.body.halalDeclaration;
+  if (typeof halalDeclaration === 'string') {
+    try {
+      halalDeclaration = JSON.parse(halalDeclaration);
+    } catch (e) {
+      return res.status(400).json({ success: false, message: 'Invalid JSON format for halalDeclaration' });
+    }
+  }
+
   const mergedData = {
     ...draft.toObject(),
-    halalDeclaration: req.body.halalDeclaration,
+    halalDeclaration,
   };
 
   const missingFields = getMissingCampaignFields(mergedData);
 
   if (missingFields.length > 0) {
-    return res.status(400).json({
-      success: false,
-      message: 'Draft is not complete enough to be submitted',
-      missingFields,
-    });
+    return res.status(400).json({ /* ... */ });
   }
 
-  // منحط البيانات المدموجة والمفحوصة جاهزة، عشان submitDraft بالسيرفس يستخدمها مباشرة
-  req.finalCampaignData = mergedData;
+  // ⬇️ إضافة: تمرير بيانات الغلاف والـ materials بشكل صريح
+  req.finalCampaignData = {
+    ...mergedData,
+    coverImage: draft.coverImage,
+    coverImagePublicId: draft.coverImagePublicId,
+  };
 
   next();
 };

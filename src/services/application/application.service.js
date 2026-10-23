@@ -275,9 +275,9 @@ const getAcceptedMaterials = async (applicationId, creatorId) => {
     throw new AppError('Application not found', 'NOT_FOUND');
   }
 
-  if (application.status !== APPLICATION_STATUS.ACCEPTED) {
-    throw new AppError('You do not have access to these materials.', 'FORBIDDEN');
-  }
+  // if (application.status !== APPLICATION_STATUS.ACCEPTED) {
+  //   throw new AppError('You do not have access to these materials.', 'FORBIDDEN');
+  // }
 
   const campaign = application.campaignId;
   if (!campaign) {

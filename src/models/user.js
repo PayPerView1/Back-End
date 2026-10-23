@@ -1,4 +1,4 @@
-// src/models/User.js
+// src/models/user.js
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
@@ -62,6 +62,10 @@ const userSchema = new mongoose.Schema(
     profilePicture: {
       type: String,
       default: 'default-avatar.png',
+    },
+      profilePicturePublicId: {   
+      type: String,
+      default: null,
     },
     // مقدمة الدولة (رمز الاتصال الدولي) - منفصلة عن الرقم نفسه
     // مثال: "+970"

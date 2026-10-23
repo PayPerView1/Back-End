@@ -118,17 +118,18 @@ const getRecommendations = async (creatorId, limit = 10) => {
     creatorId,
     campaignId: { $in: topIds },
   })
-    .select('campaignId')
+    .select('campaignId _id')
     .lean();
 
   const favoritedSet = new Set(favorites.map((f) => f.campaignId.toString()));
-
+  const favoriteIdMap = new Map(favorites.map((f) => [f.campaignId.toString(), f._id]));
   // 9. بناء الاستجابة
   const data = top.map(({ campaign: c, score, reasons }) => {
     const availability = getAvailability(c);
     return {
       id: c._id,
       name: c.name,
+      coverImage: c.coverImage || null,
       brand: c.advertiserId
         ? {
             id: c.advertiserId._id,
@@ -139,10 +140,12 @@ const getRecommendations = async (creatorId, limit = 10) => {
       contentType: c.contentType,
       cpm: c.cpm,
       remainingBudget: c.remainingBudget,
+      totalBudget: c.totalBudget,
       targetCountries: c.targetCountries,
       isHalalVerified: true,
       availability,
       isFavorited: favoritedSet.has(c._id.toString()),
+      favoriteId: favoriteIdMap.get(c._id.toString()) || null,
       matchScore: score,
       reasons,
     };

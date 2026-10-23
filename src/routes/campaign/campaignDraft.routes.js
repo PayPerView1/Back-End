@@ -1,7 +1,7 @@
 // src/routes/campaign/campaignDraft.routes.js
 const express = require('express');
 const router = express.Router();
-
+const { uploadMaterials } = require('../../services/campaign/fileUpload.service');
 const {
   createDraft,
   getDraft,
@@ -28,7 +28,7 @@ const {
 
 // @route   POST /api/v1/campaigns/drafts
 // @desc    إنشاء مسودة جديدة (اسم بس مطلوب)
-router.post('/', authMiddleware, requireBrandRole, draftCreationRules, validate, createDraft);
+router.post('/', authMiddleware, requireBrandRole, uploadMaterials, draftCreationRules, validate, createDraft);
 
 // @route   GET /api/v1/campaigns/drafts/expired
 // @desc    Fetch all expired drafts owned by the authenticated advertiser
@@ -48,6 +48,7 @@ router.put(
   '/:draftId',
   authMiddleware,
   verifyDraftOwnership,
+  uploadMaterials,
   draftUpdateRules,
   validate,
   updateDraft
@@ -74,6 +75,7 @@ router.post(
   '/:draftId/submit',
   authMiddleware,
   verifyDraftOwnership,
+  uploadMaterials,
   validateDraftSubmission,
   submitDraft
 );

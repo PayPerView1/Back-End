@@ -29,20 +29,27 @@ function validateFilesCount(files) {
 }
 
 // ============================================
-// 2.1.1 Configure Multer with Cloudinary Storage
+// 2.1.1 Configure Multer — Materials (CloudinaryStorage) + Cover (memoryStorage)
 // ============================================
-const storage = new CloudinaryStorage({
-  cloudinary: cloudinary,
+
+function sanitizeName(name) {
+  return (name || 'file')
+    .replace(/[^a-zA-Z0-9_-]/g, '_')
+    .slice(0, 50);
+}
+
+const materialsStorage = new CloudinaryStorage({
+  cloudinary,
   params: async (req, file) => {
     return {
       folder: 'campaign-materials',
       resource_type: 'auto',
-      public_id: `${Date.now()}-${path.parse(file.originalname).name}`,
+      public_id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${sanitizeName(path.parse(file.originalname).name)}`,
     };
   },
 });
 
-const fileFilter = (req, file, cb) => {
+const materialsFileFilter = (req, file, cb) => {
   if (validateFileType(file)) {
     cb(null, true);
   } else {
@@ -50,39 +57,69 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-const multerUpload = multer({
-  storage,
-  fileFilter,
-  limits: {
-    fileSize: MATERIAL_CONSTRAINTS.MAX_FILE_SIZE_MB * 1024 * 1024,
-    files: MATERIAL_CONSTRAINTS.MAX_FILES,
-  },
-});
+// const materialsUploadMw = multer({
+//   storage: materialsStorage,
+//   fileFilter: materialsFileFilter,
+//   limits: {
+//     fileSize: MATERIAL_CONSTRAINTS.MAX_FILE_SIZE_MB * 1024 * 1024,
+//     files: MATERIAL_CONSTRAINTS.MAX_FILES,
+//   },
+// }).array('materials', MATERIAL_CONSTRAINTS.MAX_FILES);
+
+// const coverImageUploadMw = multer({
+//   storage: multer.memoryStorage(),
+//   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB للـ cover
+//   fileFilter: (req, file, cb) => {
+//     if (file.mimetype.startsWith('image/')) cb(null, true);
+//     else cb(new Error('Cover image must be an image file'), false);
+//   },
+// }).single('coverImage');
 
 const uploadMaterials = (req, res, next) => {
-  const handler = multerUpload.array('materials', MATERIAL_CONSTRAINTS.MAX_FILES);
+  const upload = multer({
+    storage: multer.memoryStorage(), // نخزن في الذاكرة مؤقتاً
+    limits: {
+      fileSize: MATERIAL_CONSTRAINTS.MAX_FILE_SIZE_MB * 1024 * 1024,
+      files: MATERIAL_CONSTRAINTS.MAX_FILES + 1, // +1 للـ coverImage
+    },
+  }).fields([
+    { name: 'materials', maxCount: MATERIAL_CONSTRAINTS.MAX_FILES },
+    { name: 'coverImage', maxCount: 1 }
+  ]);
 
-  handler(req, res, (err) => {
-    if (err instanceof multer.MulterError) {
-      if (err.code === 'LIMIT_FILE_SIZE') {
-        return res.status(400).json({
-          success: false,
-          message: `Each file must not exceed ${MATERIAL_CONSTRAINTS.MAX_FILE_SIZE_MB}MB`,
-        });
+  upload(req, res, (err) => {
+    if (err) {
+      console.error('[Multer Error]:', err);
+      if (err instanceof multer.MulterError) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(400).json({ success: false, message: `File too large. Max ${MATERIAL_CONSTRAINTS.MAX_FILE_SIZE_MB}MB` });
+        }
+        return res.status(400).json({ success: false, message: err.message });
       }
-      if (err.code === 'LIMIT_FILE_COUNT') {
-        return res.status(400).json({
-          success: false,
-          message: `Cannot upload more than ${MATERIAL_CONSTRAINTS.MAX_FILES} files`,
-        });
-      }
-      return res.status(400).json({ success: false, message: err.message });
-    } else if (err) {
       return res.status(400).json({ success: false, message: err.message });
     }
     next();
   });
 };
+
+function handleMulterError(err, res) {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({
+        success: false,
+        message: `Each file must not exceed ${MATERIAL_CONSTRAINTS.MAX_FILE_SIZE_MB}MB`,
+      });
+    }
+    if (err.code === 'LIMIT_FILE_COUNT') {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot upload more than ${MATERIAL_CONSTRAINTS.MAX_FILES} files`,
+      });
+    }
+    return res.status(400).json({ success: false, message: err.message });
+  }
+  return res.status(400).json({ success: false, message: err.message });
+}
 
 // ============================================
 // 2.1.7 Determine MATERIAL_TYPE enum
@@ -97,14 +134,34 @@ function determineFileType(mimeType) {
 // ============================================
 // 2.1.5 Upload Files — Format metadata
 // ============================================
-function uploadFilesToStorage(files) {
-  return files.map((file) => ({
-    fileName: file.originalname,
-    fileUrl: file.path || file.secure_url,
-    fileType: determineFileType(file.mimetype),
-    fileSizeKb: Math.round(file.size / 1024),
-    mimeType: file.mimetype,
-  }));
+async function uploadFilesToStorage(files) {
+  if (!files || files.length === 0) return [];
+
+  const uploadedMaterials = [];
+  for (const file of files) {
+    const result = await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        {
+          folder: 'campaign-materials',
+          resource_type: 'auto',
+          public_id: `${Date.now()}-${path.parse(file.originalname).name.replace(/[^a-zA-Z0-9_-]/g, '_')}`,
+        },
+        (err, res) => (err ? reject(err) : resolve(res))
+      );
+      stream.end(file.buffer);
+    });
+
+    uploadedMaterials.push({
+      fileName: file.originalname,
+      fileUrl: result.secure_url,
+      publicId: result.public_id,
+      resourceType: result.resource_type,
+      fileType: file.mimetype.startsWith('video/') ? 'VIDEO' : file.mimetype.startsWith('image/') ? 'IMAGE' : file.mimetype.startsWith('audio/') ? 'AUDIO' : 'OTHER',
+      fileSizeKb: Math.round(file.size / 1024),
+      mimeType: file.mimetype,
+    });
+  }
+  return uploadedMaterials;
 }
 
 // ============================================
@@ -112,36 +169,99 @@ function uploadFilesToStorage(files) {
 // ============================================
 function getPublicIdFromUrl(url) {
   try {
+    if (!url || typeof url !== 'string') return null;
     const parts = url.split('/');
-    const folderIndex = parts.indexOf('campaign-materials');
+    const folderIndex = parts.findIndex(
+      (p) => p === 'campaign-materials' || p === 'campaign-covers'
+    );
     if (folderIndex === -1) return null;
-
-    // Extract folder + filename without file extension
     const pathWithExt = parts.slice(folderIndex).join('/');
     return pathWithExt.substring(0, pathWithExt.lastIndexOf('.'));
-  } catch (error) {
+  } catch {
     return null;
   }
 }
 
 // ============================================
-// 2.1.6 Delete Files from Cloudinary
+// 2.1.6 دالة الحذف من Cloudinary
 // ============================================
-async function deleteFilesFromStorage(fileUrls) {
-  if (!Array.isArray(fileUrls) || fileUrls.length === 0) {
-    return;
-  }
-
-  for (const url of fileUrls) {
+async function deleteFilesFromStorage(items) {
+  if (!items || items.length === 0) return;
+  for (const item of items) {
     try {
-      const publicId = getPublicIdFromUrl(url);
-      if (publicId) {
-        await cloudinary.uploader.destroy(publicId, { resource_type: 'auto' });
+      if (item.publicId) {
+        await cloudinary.uploader.destroy(item.publicId, { resource_type: item.resourceType || 'image' });
       }
     } catch (error) {
-      console.error(`[fileUpload.service] Failed to delete file ${url}: ${error.message}`);
+      console.error(`[fileUpload.service] Delete error:`, error.message);
     }
   }
+}
+
+/**
+ * @param {Array<{publicId:string, resourceType:string}|string>} items
+ *        إما objects ({publicId, resourceType}) أو URLs (legacy)
+ */
+async function deleteFilesFromStorage(items) {
+  if (!Array.isArray(items) || items.length === 0) return;
+
+  for (const item of items) {
+    try {
+      let publicId, resourceType;
+      if (typeof item === 'string') {
+        publicId = getPublicIdFromUrl(item);
+        resourceType = 'auto'; // fallback — رح نحاول resource_type الافتراضي
+      } else {
+        publicId = item.publicId;
+        resourceType = item.resourceType || 'auto';
+      }
+      if (!publicId) continue;
+
+      // Cloudinary destroy مبيحبش 'auto' دائمًا — نجرّب الأنواع بالترتيب
+      if (resourceType === 'auto') {
+        const types = ['image', 'video', 'raw'];
+        let deleted = false;
+        for (const t of types) {
+          try {
+            const r = await cloudinary.uploader.destroy(publicId, { resource_type: t });
+            if (r.result === 'ok' || r.result === 'not_found') { deleted = true; break; }
+          } catch (_) { /* جرّب النوع اللي بعده */ }
+        }
+        if (!deleted) {
+          console.warn(`[fileUpload.service] Could not destroy ${publicId} (auto)`);
+        }
+      } else {
+        await cloudinary.uploader.destroy(publicId, { resource_type: resourceType });
+      }
+    } catch (error) {
+      console.error(`[fileUpload.service] Failed to delete file:`, error.message);
+    }
+  }
+}
+
+// ============================================
+// 3.0.0 Upload Cover Image
+// ============================================
+async function uploadCoverImage(file) {
+  if (!file || !file.buffer) return null;
+  
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder: 'campaign-covers',
+        resource_type: 'image',
+      },
+      (err, result) => {
+        if (err) return reject(err);
+        resolve({
+          url: result.secure_url,
+          publicId: result.public_id,
+          resourceType: 'image',
+        });
+      }
+    );
+    stream.end(file.buffer);
+  });
 }
 
 module.exports = {
@@ -152,4 +272,5 @@ module.exports = {
   uploadFilesToStorage,
   deleteFilesFromStorage,
   determineFileType,
+  uploadCoverImage,
 };

@@ -5,6 +5,7 @@ const Campaign = require('../../models/campaign');
 const {
   uploadFilesToStorage,
   deleteFilesFromStorage,
+  uploadCoverImage,
 } = require('./fileUpload.service');
 
 const {
@@ -39,35 +40,42 @@ const {
 async function createCampaign(
   advertiserId,
   campaignData,
-  files = [],
-  ipAddress = ''
+  files = [],            // materials فقط (array من multer .array('materials'))
+  ipAddress = '',
+  coverImageData = null  // { url, publicId, resourceType } | null
 ) {
   let uploadedMaterials = [];
+  let coverImageUrl = coverImageData?.url || null;
+  let coverImagePublicId = coverImageData?.publicId || null;
 
   try {
-    // 1. رفع الملفات المرفقة
-    if (files.length > 0) {
-      const uploaded = uploadFilesToStorage(files);
-
-      // كل مادة لازم يكون فيها uploadedBy
-      uploadedMaterials = uploaded.map((material) => ({
-        ...material,
+    // 1. رفع/تجهيز الـ materials
+    if (files && files.length > 0) {
+      const uploaded = await uploadFilesToStorage(files); // <-- await هنا
+      uploadedMaterials = uploaded.map((m) => ({
+        ...m,
         uploadedBy: advertiserId,
       }));
     }
 
-    // 2. إنشاء مستند الحملة
+
+    // 2. الـ coverImage جاهز من الـ controller (مرفوع مسبقًا)
+    if (coverImageData) {
+      coverImageUrl = coverImageData.url || coverImageData; // دعم string للتوافق
+      coverImagePublicId = coverImageData.publicId || null;
+    }
+
+    // 3. إنشاء مستند الحملة
     const campaign = await Campaign.create({
       advertiserId,
       name: campaignData.name,
+      coverImage: coverImageUrl || null,
+      coverImagePublicId: coverImagePublicId || null,
       contentType: campaignData.contentType,
       category: campaignData.category,
       subCategories: campaignData.subCategories || [],
       totalBudget: campaignData.totalBudget,
-
-      // ضبط remainingBudget = totalBudget
       remainingBudget: campaignData.totalBudget,
-
       cpm: campaignData.cpm,
       dailyBudgetLimit: campaignData.dailyBudgetLimit || null,
       brief: campaignData.brief,
@@ -86,29 +94,26 @@ async function createCampaign(
         declaredAt: new Date(),
         ipAddress,
       },
-       status: CAMPAIGN_STATUS.PENDING_REVIEW,
-       submittedAt: new Date(),
+      status: CAMPAIGN_STATUS.PENDING_REVIEW,
+      submittedAt: new Date(),
     });
 
-    // 3. تسجيل حدث الإنشاء
-    await logActivity(
-      campaign._id,
-      CAMPAIGN_ACTION.CREATED,
-      advertiserId
-    );
+    // 4. تسجيل الحدث
+    await logActivity(campaign._id, CAMPAIGN_ACTION.CREATED, advertiserId);
 
     return campaign;
-
   } catch (error) {
-    // 4. Rollback
-    // لو فشل حفظ الحملة بعد رفع الملفات فعليًا، نحذف الملفات
-    if (uploadedMaterials.length > 0) {
-      await deleteFilesFromStorage(
-        uploadedMaterials.map((m) => m.fileUrl)
-      );
+    // 5. Rollback — احذف materials + coverImage
+    const toDelete = uploadedMaterials.map((m) => ({
+      publicId: m.publicId,
+      resourceType: m.resourceType,
+    }));
+    if (coverImagePublicId) {
+      toDelete.push({ publicId: coverImagePublicId, resourceType: 'image' });
     }
-
-    // نرمي الخطأ الأصلي
+    if (toDelete.length > 0) {
+      await deleteFilesFromStorage(toDelete);
+    }
     throw error;
   }
 }

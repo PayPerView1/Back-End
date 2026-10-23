@@ -178,7 +178,7 @@ const getDiscoverCampaigns = async (creatorId, filters = {}) => {
   const campaignIds = campaigns.map((c) => c._id);
   const [favorites, applications] = await Promise.all([
     Favorite.find({ creatorId, campaignId: { $in: campaignIds } })
-      .select('campaignId')
+      .select('campaignId _id')
       .lean(),
     Application.find({ creatorId, campaignId: { $in: campaignIds } })
       .select('campaignId status')
@@ -186,6 +186,7 @@ const getDiscoverCampaigns = async (creatorId, filters = {}) => {
   ]);
 
   const favoritedSet = new Set(favorites.map((f) => f.campaignId.toString()));
+  const favoriteIdMap = new Map(favorites.map((f) => [f.campaignId.toString(), f._id]));
   const appStatusMap = new Map();
   applications.forEach((a) => {
     const status =
@@ -205,6 +206,7 @@ const getDiscoverCampaigns = async (creatorId, filters = {}) => {
     return {
       id: c._id,
       name: c.name,
+      coverImage: c.coverImage || null,
       brand: c.advertiserId
         ? {
             id: c.advertiserId._id,
@@ -216,12 +218,14 @@ const getDiscoverCampaigns = async (creatorId, filters = {}) => {
       subCategories: c.subCategories || [],
       cpm: c.cpm,
       remainingBudget: c.remainingBudget,
+      totalBudget: c.totalBudget,  
       targetCountries: c.targetCountries,
       isHalalVerified: true,
       availability,
       unavailableReason,
       endDate: c.endDate,
       isFavorited: favoritedSet.has(c._id.toString()),
+      favoriteId: favoriteIdMap.get(c._id.toString()) || null,
       applicationStatus: appStatusMap.get(c._id.toString()) || null,
       createdAt: c.createdAt,
       ...(matched && {
@@ -325,11 +329,18 @@ const getCampaignDetails = async (campaignId, creatorId) => {
   }
 
   const canDownloadMaterials = appStatus === APPLICATION_STATUS.ACCEPTED;
-  const materials = (campaign.materials || []).map(toPreviewMaterial);
+  const materials = (campaign.materials || []).map((m) => {
+    const preview = toPreviewMaterial(m);
+    if (canDownloadMaterials) {
+      preview.downloadUrl = m.fileUrl; // إتاحة الرابط الأصلي للمقبولين فقط
+    }
+    return preview;
+  });
 
   return {
     id: campaign._id,
     name: campaign.name,
+    coverImage: campaign.coverImage || null,
     brand: campaign.advertiserId
       ? {
           id: campaign.advertiserId._id,
@@ -340,6 +351,7 @@ const getCampaignDetails = async (campaignId, creatorId) => {
     contentType: campaign.contentType,
     subCategories: campaign.subCategories || [],
     cpm: campaign.cpm,
+    totalBudget: campaign.totalBudget,
     remainingBudget: campaign.remainingBudget,
     targetCountries: campaign.targetCountries,
     isHalalVerified: true,

@@ -8,7 +8,7 @@ const { normalizeCountryList } = require('../../utils/countries.utils');
 // قائمة الـ sub-categories المسموحة تحديدًا لما contentType = MIXED
 // (مأخوذة من CAMPAIGN_CATEGORIES نفسها، مش مكررة يدويًا، عشان تضل متزامنة معها دايمًا)
 const MIXED_SUB_CATEGORIES = CAMPAIGN_CATEGORIES.find((c) => c.name === 'MIXED').subCategories;
-
+const CATEGORY_NAMES = CAMPAIGN_CATEGORIES.map((c) => c.name);
 // ============================================
 // 3.1.2 — فحص إعلان الحلال (قابل لإعادة الاستخدام لحاله كمان)
 // ============================================
@@ -56,7 +56,7 @@ function getMissingCampaignFields(data) {
     missing.push('contentType');
   }
 
-  if (!data.category || !Object.values(CONTENT_TYPE).includes(data.category)) {
+  if (!data.category || !CATEGORY_NAMES.includes(data.category)) {
     missing.push('category');
   }
 
@@ -101,6 +101,12 @@ const campaignCreationRules = [
     .isLength({ max: 255 })
     .withMessage('Campaign name cannot exceed 255 characters'),
 
+  body('coverImage')
+  .optional({ checkFalsy: true })
+  .if((value) => typeof value === 'string')
+  .isURL()
+  .withMessage('Cover image must be a valid URL if provided as string'),
+
   body('contentType')
     .notEmpty()
     .withMessage('Content type is required')
@@ -108,10 +114,10 @@ const campaignCreationRules = [
     .withMessage(`Content type must be one of: ${Object.values(CONTENT_TYPE).join(', ')}`),
 
   body('category')
-    .notEmpty()
-    .withMessage('Category is required')
-    .isIn(Object.values(CONTENT_TYPE))
-    .withMessage(`Category must be one of: ${Object.values(CONTENT_TYPE).join(', ')}`),
+  .notEmpty()
+  .withMessage('Category is required')
+  .isIn(CATEGORY_NAMES)
+  .withMessage(`Category must be one of: ${CATEGORY_NAMES.join(', ')}`),
 
   // subCategories: مطلوبة بس لو contentType = MIXED
   body('subCategories')

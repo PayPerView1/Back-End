@@ -4,12 +4,12 @@ const User = require('../../models/user');
 const { sendEmail } = require('../emailService');
 const { deleteFilesFromStorage } = require('./fileUpload.service');
 const { logActivity } = require('./activityLog.service');
-const { createCampaign, submitCampaignForReview } = require('./campaignCreation.service');
+const { createCampaign } = require('./campaignCreation.service');
 const { CAMPAIGN_ACTION, CAMPAIGN_STATUS } = require('../../constants/campaign.constants');
    const DRAFT_UPDATABLE_FIELDS = [
      'name', 'contentType', 'category', 'subCategories', 'totalBudget', 'cpm',
      'dailyBudgetLimit', 'brief', 'targetCountries', 'halalDeclared',
-     'startDate', 'endDate', 'maxApplicants', 'requirements',
+     'startDate', 'endDate', 'maxApplicants', 'requirements', 'coverImage',
    ];
 // ============================================
 // 6.1.1 — إنشاء مسودة جديدة
@@ -38,6 +38,8 @@ async function createDraft(advertiserId, draftData) {
     materials: draftData.materials || [],
     startDate: draftData.startDate || null,
     endDate: draftData.endDate || null,
+    coverImage: draftData.coverImage || null,
+    coverImagePublicId: draftData.coverImagePublicId || null, // ⬅️ تمت الإضافة
   });
 
   await logActivity(draft._id, CAMPAIGN_ACTION.CREATED, advertiserId, { type: 'DRAFT' });
@@ -167,19 +169,38 @@ async function autoSaveDraft(draft, updateData, clientVersion) {
 // ============================================
 // 6.1.5 — حذف مسودة
 // ============================================
-/**
- * @param {Object} draft - مستند المسودة
- */
 async function deleteDraft(draft) {
-  // حذف الملفات المرفقة من التخزين أول (لو في أي مواد مرفوعة)
+  // تجهيز الملفات للحذف بالشكل الجديد { publicId, resourceType }
+  const filesToDelete = [];
+  
   if (draft.materials && draft.materials.length > 0) {
-    const fileUrls = draft.materials.map((m) => m.fileUrl);
-    await deleteFilesFromStorage(fileUrls);
+    draft.materials.forEach((m) => {
+      if (m.publicId) {
+        filesToDelete.push({
+          publicId: m.publicId,
+          resourceType: m.resourceType,
+        });
+      }
+    });
+  }
+
+  // إضافة صورة الغلاف إذا وجدت
+  if (draft.coverImagePublicId) {
+    filesToDelete.push({
+      publicId: draft.coverImagePublicId,
+      resourceType: 'image',
+    });
+  }
+
+  // حذف الملفات من Cloudinary
+  if (filesToDelete.length > 0) {
+    await deleteFilesFromStorage(filesToDelete);
   }
 
   const draftId = draft._id;
   const advertiserId = draft.advertiserId;
 
+  // حذف المسودة من قاعدة البيانات
   await CampaignDraft.deleteOne({ _id: draftId });
 
   await logActivity(draftId, CAMPAIGN_ACTION.DELETED, advertiserId, { type: 'DRAFT' });
@@ -196,33 +217,53 @@ async function deleteDraft(draft) {
  * @param {Object} finalData - بيانات الحملة الكاملة والمفحوصة (draft + halalDeclaration الكاملة)
  * @param {string} [ipAddress]
  * @returns {Promise<Object>} الحملة الجديدة بعد الإنشاء والمراجعة
+  * @throws {Error} لو المسودة منتهية الصلاحية (EXPIRED)
  */
 async function submitDraft(draft, finalData, ipAddress = '') {
   const advertiserId = draft.advertiserId;
 
   // 1. تحويل مواد المسودة لشكل متوافق مع materials تبع الحملة الفعلية
-  //    (draftMaterialSchema وmaterialSchema متطابقين تقريبًا، بس ناقصهم uploadedBy)
+  // (مع التأكد من نقل publicId و resourceType)
   const existingMaterials = (draft.materials || []).map((m) => ({
     fileName: m.fileName,
     fileUrl: m.fileUrl,
     fileType: m.fileType,
     fileSizeKb: m.fileSizeKb,
     mimeType: m.mimeType,
+    publicId: m.publicId,         // ⬅️ تمت الإضافة
+    resourceType: m.resourceType, // ⬅️ تمت الإضافة
   }));
 
-  // 2. إنشاء الحملة الفعلية — بنمرر مصفوفة ملفات فاضية لأنو الملفات أصلاً
-  //    مرفوعة ومخزنة من وقت التسويد، منحطهم يدويًا بعد الإنشاء
-  const campaign = await createCampaign(advertiserId, finalData, [], ipAddress);
+  // 2. تجهيز بيانات صورة الغلاف بالشكل الذي تتوقعه createCampaign
+  let coverImageData = null;
+  if (draft.coverImage) {
+    coverImageData = {
+      url: draft.coverImage,
+      publicId: draft.coverImagePublicId,
+      resourceType: 'image',
+    };
+  }
 
+  // 3. إنشاء الحملة الفعلية — نمرر مصفوفة فارغة للملفات لأنها مرفوعة مسبقاً
+  // ونمرر coverImageData في المعامل الأخير
+  const campaign = await createCampaign(
+    advertiserId, 
+    finalData, 
+    [], 
+    ipAddress, 
+    coverImageData // ⬅️ تم تمرير البيانات بالشكل الجديد
+  );
+
+  // 4. إضافة المواد للحملة
   if (existingMaterials.length > 0) {
     campaign.materials = existingMaterials.map((m) => ({ ...m, uploadedBy: advertiserId }));
     await campaign.save();
   }
 
-  // 3. تسليمها فورًا للمراجعة (AI review) — نفس مسار POST /campaigns العادي
+  // 5. تسليمها فورًا للمراجعة (AI review) - بناءً على الكود الأصلي (متروك كما هو)
   // const reviewedCampaign = await submitCampaignForReview(campaign);
 
-  // 4. حذف المسودة بعد النجاح (حسب الخطة — بدون حذف الملفات، لأنها انتقلت للحملة الجديدة)
+  // 6. حذف المسودة بعد النجاح (بدون حذف الملفات، لأنها انتقلت للحملة الجديدة)
   await CampaignDraft.deleteOne({ _id: draft._id });
 
   await logActivity(campaign._id, CAMPAIGN_ACTION.SUBMITTED, advertiserId, {
