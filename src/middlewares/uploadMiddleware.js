@@ -1,37 +1,24 @@
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const cloudinary = require('../config/cloudinary'); // تأكد من مسار الإعدادات
 
-// مجلد تخزين الصور المرفوعة
-const UPLOAD_DIR = path.join(__dirname, '../../uploads/profile-pictures');
-
-// إنشاء المجلد تلقائيًا لو غير موجود
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-}
-
-// إعداد مكان وتسمية الملف المرفوع
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, UPLOAD_DIR);
-  },
-  filename: (req, file, cb) => {
-    // 1. التأكد من وجود req.user وتحديد المعرف (ليدعم SignUp و Edit Profile)
-    const identifier = req.user?._id || 'new-user';
-
-    // 2. اسم فريد: identifier + وقت الرفع + الامتداد الأصلي
-    const uniqueSuffix = `${identifier}-${Date.now()}`;
-    const ext = path.extname(file.originalname); // .jpg, .png...
-
-    // 3. إرجاع اسم الملف النهائي
-    cb(null, `${uniqueSuffix}${ext}`);
+// 1. إعداد التخزين على Cloudinary
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'profile-pictures', // اسم المجلد في Cloudinary
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+    resource_type: 'image',
+    public_id: (req, file) => {
+      const identifier = req.user?._id || 'new-user';
+      return `${identifier}-${Date.now()}`;
+    },
   },
 });
 
-// فلترة نوع الملف - السماح بالصور فقط
+// 2. فلترة نوع الملف - السماح بالصور فقط
 const fileFilter = (req, file, cb) => {
   const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-
   if (allowedTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
@@ -39,6 +26,7 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
+// 3. إعداد multer
 const upload = multer({
   storage,
   fileFilter,
@@ -47,7 +35,7 @@ const upload = multer({
   },
 });
 
-// Middleware معالجة أخطاء multer تحويلها لـ JSON موحد
+// 4. Middleware لمعالجة الأخطاء
 const handleUploadError = (uploadMiddleware) => {
   return (req, res, next) => {
     uploadMiddleware(req, res, (err) => {

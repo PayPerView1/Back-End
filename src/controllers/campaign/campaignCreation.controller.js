@@ -1,6 +1,6 @@
 // src/controllers/campaign/campaignCreation.controller.js
-const { createCampaign: createCampaignService, submitCampaignForReview, runCampaignAIReview } = require('../../services/campaign/campaignCreation.service');
-
+const { createCampaign: createCampaignService, runCampaignAIReview } = require('../../services/campaign/campaignCreation.service');
+const { uploadCoverImage } = require('../../services/campaign/fileUpload.service');
 // ============================================
 // 5.2.1 — POST /api/v1/campaigns
 // ============================================
@@ -11,23 +11,37 @@ const { createCampaign: createCampaignService, submitCampaignForReview, runCampa
 const createCampaign = async (req, res) => {
   try {
     const advertiserId = req.user._id;
-    const files = req.files || [];
 
-    // 1. إنشاء الحملة (بحالة PENDING_REVIEW مبدئيًا)
-    const campaign = await createCampaignService(advertiserId, req.body, files, req.ip);
+    // الـ middleware الجديد بيخلي:
+    //   req.files = array of materials
+    //   req.file  = coverImage (memoryStorage) | undefined
+    const materials = req.files?.materials || [];
+    const coverImageFile = req.files?.coverImage?.[0] || null;
 
-   // 2. إرجاع الحملة بدون استدعاء AI review
+    let coverImageData = null;
+    if (coverImageFile) {
+      coverImageData = await uploadCoverImage(coverImageFile);
+      // { url, publicId, resourceType }
+    }
+
+    const campaign = await createCampaignService(
+      advertiserId,
+      req.body,
+      materials,
+      req.ip,
+      coverImageData
+    );
     res.status(201).json({
       success: true,
       message: 'Campaign created and submitted for review',
       campaign,
     });
   } catch (error) {
-    // console.error(`[campaignCreation.controller] createCampaign error: ${error.message}`);
     console.error('[campaignCreation.controller] createCampaign error:', error);
-    res.status(500).json({
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
       success: false,
-      message: 'Server error while creating campaign',
+      message: error.message || 'Server error while creating campaign',
     });
   }
 };

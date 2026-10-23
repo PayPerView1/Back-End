@@ -1,22 +1,30 @@
 // src/services/emailService.js
 
-const sgMail = require('@sendgrid/mail');
+const { BrevoClient } = require('@getbrevo/brevo');
 
-sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+// تهيئة عميل Brevo
+const brevo = new BrevoClient({
+  apiKey: process.env.BREVO_API_KEY,
+});
 
 // ----------------------
-// الدالة الأساسية — موجودة مسبقاً
+// الدالة الأساسية المعدلة — تستخدم Brevo الآن
 // ----------------------
 const sendEmail = async (options) => {
   try {
-    const msg = {
-      to: options.email,
-      from: {
-        email: process.env.SENDGRID_FROM_EMAIL || process.env.SMTP_USER,
+    const response = await brevo.transactionalEmails.sendTransacEmail({
+      sender: {
         name: 'PayPerView Support',
+        // ⚠️ يجب أن يكون هذا الإيميل موثقاً في حساب Brevo
+        email: process.env.BREVO_FROM_EMAIL || process.env.SMTP_USER, 
       },
+      to: [
+        {
+          email: options.email,
+        },
+      ],
       subject: options.subject,
-      html: `
+      htmlContent: `
         <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
           <h2>${options.subject}</h2>
           <p>${options.message}</p>
@@ -24,16 +32,20 @@ const sendEmail = async (options) => {
           <small>PayPerView System Email</small>
         </div>
       `,
-    };
+    });
 
-    const response = await sgMail.send(msg);
-    console.log(`[SENDGRID SUCCESS] Email sent to: ${options.email} | Status: ${response[0].statusCode}`);
+const messageId = response.messageId || response.data?.messageId || 'N/A';
+console.log(`[BREVO SUCCESS] Email sent to: ${options.email} | Message ID: ${messageId}`);
     return response;
+
   } catch (error) {
-    console.error('[SENDGRID ERROR]:', error.response?.body || error.message);
+    // طباعة تفاصيل الخطأ من Brevo للمساعدة في التشخيص
+    console.error('[BREVO ERROR]:', error.body || error.message);
     throw error;
   }
 };
+
+// ... (باقي الكود كما هو تماماً، لا حاجة لتغيير دوال مثل sendFundingSuccessEmail)
 
 // ----------------------
 // Sprint 3 — Funding Emails
@@ -254,38 +266,3 @@ module.exports = {
 // Dormant Wallet  
   sendDormantWalletEmail,
 };
-// const sgMail = require('@sendgrid/mail');
-
-// // ضبط الـ API Key الخاص بـ SendGrid
-// sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-
-// const sendEmail = async (options) => {
-//   try {
-//     const msg = {
-//       to: options.email,
-//       // ⚠️ يجب أن يكون إيميل المرسل دقيقاً ومطابقاً للإيميل الذي تم توثيقه في Single Sender Verification
-//       from: {
-//         email: process.env.SENDGRID_FROM_EMAIL || process.env.SMTP_USER,
-//         name: 'PayPerView Support',
-//       },
-//       subject: options.subject,
-//       html: `
-//         <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
-//           <h2>${options.subject}</h2>
-//           <p>${options.message}</p>
-//           <hr />
-//           <small>PayPerView System Email</small>
-//         </div>
-//       `,
-//     };
-
-//     const response = await sgMail.send(msg);
-//     console.log(`[SENDGRID SUCCESS] Email sent to: ${options.email} | Status: ${response[0].statusCode}`);
-//     return response;
-//   } catch (error) {
-//     console.error('[SENDGRID ERROR]:', error.response?.body || error.message);
-//     throw error; // إلقاء الخطأ ليتعامل معه الـ Controller
-//   }
-// };
-
-// module.exports = sendEmail;

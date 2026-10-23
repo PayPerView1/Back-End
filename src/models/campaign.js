@@ -1,3 +1,4 @@
+// src/models/campaign.js
 const mongoose = require('mongoose');
 const {
   CAMPAIGN_STATUS,
@@ -12,13 +13,16 @@ const {
 // ----------------------
 const materialSchema = new mongoose.Schema(
   {
-    fileName:   { type: String, required: true },
-    fileUrl:    { type: String, required: true },
-    fileType:   { type: String, enum: Object.values(MATERIAL_TYPE), required: true },
-    fileSizeKb: { type: Number, required: true },
-    mimeType:   { type: String, required: true },
-    isPrimary:  { type: Boolean, default: false },
-    uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    fileName:     { type: String, required: true },
+    fileUrl:      { type: String, required: true },
+    fileType:     { type: String, enum: Object.values(MATERIAL_TYPE), required: true },
+    fileSizeKb:   { type: Number, required: true },
+    mimeType:     { type: String, required: true },
+    isPrimary:    { type: Boolean, default: false },
+    uploadedBy:   { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    // ⬇️ جديد — للحذف الموثوق من Cloudinary
+    publicId:     { type: String, required: true },
+    resourceType: { type: String, enum: ['image', 'video', 'raw'], required: true },
   },
   { _id: true, timestamps: { createdAt: 'uploadedAt', updatedAt: false } }
 );
@@ -111,6 +115,14 @@ const campaignSchema = new mongoose.Schema(
       required: [true, 'Campaign name is required'],
       trim: true,
       maxlength: [255, 'Campaign name cannot exceed 255 characters'],
+    },
+    coverImage: {
+      type: String,
+      default: null,
+    },
+    coverImagePublicId: {
+      type: String,
+      default: null,
     },
     contentType: {
       type: String,

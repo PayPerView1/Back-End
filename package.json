@@ -20,6 +20,7 @@
     "test": "jest"
   },
   "dependencies": {
+    "@getbrevo/brevo": "^6.2.0",
     "@sendgrid/mail": "^8.1.6",
     "axios": "^1.20.0",
     "bcryptjs": "^3.0.3",

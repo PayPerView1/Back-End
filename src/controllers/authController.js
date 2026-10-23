@@ -47,8 +47,11 @@ exports.register = async (req, res) => {
     }
 
     let finalProfilePicture = '';
+    let finalProfilePicturePublicId = null; // ⬅️ متغير جديد لحفظ الـ public_id
+
     if (req.file) {
-      finalProfilePicture = `/uploads/profile-pictures/${req.file.filename}`;
+      finalProfilePicture = req.file.path;             // ⬅️ رابط Cloudinary
+      finalProfilePicturePublicId = req.file.filename; // ⬅️ الـ public_id من Cloudinary
     } else if (profilePicture) {
       finalProfilePicture = profilePicture;
     }
@@ -62,7 +65,8 @@ exports.register = async (req, res) => {
       phoneCountryCode: phoneCountryCode || '',
       country: country || '',
       city: city || '',
-      profilePicture: finalProfilePicture || ''
+      profilePicture: finalProfilePicture || '',
+      profilePicturePublicId: finalProfilePicturePublicId || '',
     });
 
     const verificationToken = user.createEmailVerificationToken();

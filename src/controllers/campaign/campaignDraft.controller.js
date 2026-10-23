@@ -1,12 +1,36 @@
 // src/controllers/campaign/campaignDraft.controller.js
 const draftService = require('../../services/campaign/campaignDraft.service');
-
+const { uploadCoverImage, uploadFilesToStorage } = require('../../services/campaign/fileUpload.service');
 // ============================================
 // 6.2.1 — POST /api/v1/campaigns/drafts
 // ============================================
 const createDraft = async (req, res) => {
   try {
-    const draft = await draftService.createDraft(req.user._id, req.body);
+    const advertiserId = req.user._id;
+    const materials = req.files?.materials || [];
+    const coverImageFile = req.files?.coverImage?.[0] || null;
+
+    // 1. رفع صورة الغلاف إذا وجدت
+    let coverImageData = null;
+    if (coverImageFile) {
+      coverImageData = await uploadCoverImage(coverImageFile);
+    }
+
+    // 2. رفع المواد إذا وجدت
+    let uploadedMaterials = [];
+    if (materials.length > 0) {
+      uploadedMaterials = await uploadFilesToStorage(materials);
+    }
+
+    // 3. تجهيز البيانات وتمريرها للـ Service
+    const draftData = {
+      ...req.body,
+      coverImage: coverImageData?.url || null,
+      coverImagePublicId: coverImageData?.publicId || null,
+      materials: uploadedMaterials,
+    };
+
+    const draft = await draftService.createDraft(advertiserId, draftData);
 
     res.status(201).json({
       success: true,
@@ -14,9 +38,8 @@ const createDraft = async (req, res) => {
       draft,
     });
   } catch (error) {
-    // console.error(`[campaignDraft.controller] createDraft error: ${error.message}`);
-    console.error('[campaignDraft.controller] submitDraft error:', error);
-    res.status(500).json({ success: false, message: 'Server error while creating draft' });
+    console.error('[campaignDraft.controller] createDraft error:', error);
+    res.status(500).json({ success: false, message: error.message || 'Server error while creating draft' });
   }
 };
 
@@ -60,7 +83,30 @@ const getAllDrafts = async (req, res) => {
 // ============================================
 const updateDraft = async (req, res) => {
   try {
-    const updatedDraft = await draftService.updateDraft(req.draft, req.body);
+    const materials = req.files?.materials || [];
+    const coverImageFile = req.files?.coverImage?.[0] || null;
+
+    let coverImageData = null;
+    if (coverImageFile) {
+      coverImageData = await uploadCoverImage(coverImageFile);
+    }
+
+    let uploadedMaterials = [];
+    if (materials.length > 0) {
+      uploadedMaterials = await uploadFilesToStorage(materials);
+    }
+
+    const updateData = { ...req.body };
+    if (coverImageData) {
+      updateData.coverImage = coverImageData.url;
+      updateData.coverImagePublicId = coverImageData.publicId;
+    }
+    if (uploadedMaterials.length > 0) {
+      // ملاحظة: هذا سيستبدل المصفوفة القديمة بالكامل. إذا أردت الإضافة فقط، يجب تعديل الـ Service.
+      updateData.materials = uploadedMaterials; 
+    }
+
+    const updatedDraft = await draftService.updateDraft(req.draft, updateData);
 
     res.status(200).json({
       success: true,

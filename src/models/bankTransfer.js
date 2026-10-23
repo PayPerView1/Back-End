@@ -1,3 +1,4 @@
+// src/models/bankTransfer.js
 const mongoose = require('mongoose');
 const { BANK_TRANSFER_STATUS } = require('../constants/payment.constants');
 

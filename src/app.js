@@ -45,7 +45,7 @@ app.use(express.json()); // لقراءة البيانات القادمة بصي�
 
 // عشان الصور المرفوعة تصير قابلة للوصول عن طريق رابط مباشر
 // مثال: http://localhost:5000/uploads/profile-pictures/xxx.jpg
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // مسار تجريبي (Health Check)
 app.get('/', (req, res) => {
@@ -88,7 +88,7 @@ app.use('/api/v1/notifications', notificationRoutes);
 // Campaign budget routes
 // مركَّب على /api/v1/campaigns ومساراته /:campaignId/budget ... (الـ middleware على كل route)
 // ولا يوجد فيه router.use عام، فلا يعترض طلبات غيره ولا يكرر protect.
-app.use('/api/v1/campaigns', campaignBudgetRoutes);
+app.use('/api/v1/campaigns/:campaignId', campaignBudgetRoutes);
 // ⚠️ ملاحظة مهمة: /drafts لازم تترط قبل /campaigns العامة (نفس مبدأ "الروابط
 // الثابتة أولاً" المذكور بالخطة) — عشان أي توسعة لاحقة (مثلاً /:campaignId من
 // campaignManagement.routes تبع الشخص الثاني) ما تتعارض أو تسبق مسارات /drafts

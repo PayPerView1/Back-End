@@ -1,3 +1,4 @@
+// src/models/CampaignDraft.js
 const mongoose = require('mongoose');
 const {
   CONTENT_TYPE,
@@ -15,6 +16,8 @@ const draftMaterialSchema = new mongoose.Schema(
     fileType:   { type: String, enum: Object.values(MATERIAL_TYPE), required: true },
     fileSizeKb: { type: Number, required: true },
     mimeType:   { type: String, required: true },
+    publicId:     { type: String, required: true },
+    resourceType: { type: String, enum: ['image', 'video', 'raw'], required: true },
   },
   { _id: true, timestamps: { createdAt: 'uploadedAt', updatedAt: false } }
 );
@@ -38,6 +41,12 @@ const campaignDraftSchema = new mongoose.Schema(
       trim: true,
       maxlength: 255,
     },
+
+    coverImage: {
+    type: String,
+    default: null,
+    },
+    coverImagePublicId: { type: String, default: null },
 
     // كل ما يلي اختياري في المسودة
     contentType:    { type: String, enum: [...Object.values(CONTENT_TYPE), null], default: null },

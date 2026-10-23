@@ -1,6 +1,6 @@
 // src/controllers/profileController.js
 const User = require('../models/user'); // عدّل المسار حسب مكان الملف عندك
-
+const cloudinary = require('../config/cloudinary');
 // @desc    جلب بيانات البروفايل الخاصة بالمستخدم الحالي
 // @route   GET /api/profile
 // @access  Private (لازم يكون فيه authMiddleware قبلها)
@@ -67,10 +67,19 @@ const updateProfile = async (req, res) => {
 
     // الصورة: إما ملف مرفوع فعليًا (req.file من multer) أو رابط نصي (profilePicture بالـ body)
     // الأولوية للملف المرفوع لو الاتنين وصلوا بنفس الطلب بالغلط
-    if (req.file) {
-      // بنبني رابط نسبي يقدر الفرونت إند يستخدمه مباشرة لعرض الصورة
-      // مثال: /uploads/profile-pictures/650f1a2b3c-1719999999999.jpg
-      user.profilePicture = `/uploads/profile-pictures/${req.file.filename}`;
+        if (req.file) {
+      // إذا كان المستخدم يملك صورة قديمة على Cloudinary، نحذفها أولاً
+      if (user.profilePicturePublicId) {
+        try {
+          await cloudinary.uploader.destroy(user.profilePicturePublicId);
+        } catch (err) {
+          console.error('Failed to delete old profile picture:', err);
+        }
+      }
+      
+      // حفظ الرابط الجديد والـ public_id
+      user.profilePicture = req.file.path; // رابط Cloudinary
+      user.profilePicturePublicId = req.file.filename; // public_id من Cloudinary
     } else if (profilePicture !== undefined) {
       user.profilePicture = profilePicture;
     }
