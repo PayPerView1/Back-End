@@ -14,7 +14,8 @@ const {
   getAvailability,
 } = require('../../utils/campaign/campaignVisibility.utils');
 const { parsePagination, buildPageMeta } = require('../../utils/paginate.utils');
-
+const { getAcceptedApplication } = require('../../utils/submission/submissionGuards.utils');
+const { CAMPAIGN_STATUS } = require('../../constants/campaign.constants');
 // ============================================
 // 1. Apply to a Campaign
 // ============================================
@@ -263,33 +264,28 @@ const getMyApplications = async (creatorId, filters = {}) => {
 // ============================================
 // 4. Accepted Materials (Download)
 // ============================================
+// ⚠️ A5.0: شرط ACCEPTED كان معلّقاً. الآن:
+//   - طلب مبدع آخر أو غير موجود  => 404 NOT_FOUND (لا نكشف وجوده)
+//   - طلب غير مقبول              => 403 APPLICATION_NOT_ACCEPTED
+//   - حملة ملغاة/موقوفة/مؤرشفة   => 409 CAMPAIGN_UNAVAILABLE
+// (الشكل الحالي للاستجابة، ومنه downloadUrl، لم يتغير بعد. يتغير في A5.2.)
 const getAcceptedMaterials = async (applicationId, creatorId) => {
-  const application = await Application.findOne({
-    _id: applicationId,
-    creatorId,
-  })
-    .populate('campaignId')
-    .lean();
+  const application = await getAcceptedApplication(creatorId, { applicationId });
 
-  if (!application) {
-    throw new AppError('Application not found', 'NOT_FOUND');
-  }
-
-  // if (application.status !== APPLICATION_STATUS.ACCEPTED) {
-  //   throw new AppError('You do not have access to these materials.', 'FORBIDDEN');
-  // }
-
-  const campaign = application.campaignId;
+  const campaign = await Campaign.findById(application.campaignId).lean();
   if (!campaign) {
     throw new AppError('Campaign not found', 'NOT_FOUND');
   }
 
-  // منع التنزيل إذا الحملة ملغاة أو موقوفة
-  if (campaign.isSuspended === true) {
+  if (
+    campaign.isSuspended === true ||
+    campaign.isArchived === true ||
+    campaign.status === CAMPAIGN_STATUS.CANCELLED
+  ) {
     throw new AppError('This campaign is currently unavailable.', 'CAMPAIGN_UNAVAILABLE');
   }
 
-  const materials = (campaign.materials || []).map((m) => ({
+  return (campaign.materials || []).map((m) => ({
     id: m._id,
     fileName: m.fileName,
     fileType: m.fileType,
@@ -297,8 +293,6 @@ const getAcceptedMaterials = async (applicationId, creatorId) => {
     fileSizeKb: m.fileSizeKb,
     downloadUrl: m.fileUrl,
   }));
-
-  return materials;
 };
 
 /**

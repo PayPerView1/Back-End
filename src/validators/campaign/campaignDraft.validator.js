@@ -131,6 +131,65 @@ const draftUpdateRules = [
 
   body('requirements.minRating').optional({ nullable: true })
     .isFloat({ min: 0, max: 5 }).withMessage('Min rating must be between 0 and 5').toFloat(),
+
+  // ============================================
+  // [Sprint 5] قواعد التحقق من متطلبات التقديم للمسودة
+  // ============================================
+  body('submissionRequirements').optional(),
+
+  body('submissionRequirements.platforms')
+    .optional()
+    .isArray()
+    .withMessage('Platforms must be an array'),
+
+  body('submissionRequirements.requiredHashtags')
+    .optional()
+    .isArray()
+    .withMessage('Required hashtags must be an array'),
+
+  body('submissionRequirements.requiredKeywords')
+    .optional()
+    .isArray()
+    .withMessage('Required keywords must be an array'),
+
+  body('submissionRequirements.requiredMentions')
+    .optional()
+    .isArray()
+    .withMessage('Required mentions must be an array'),
+
+  body('submissionRequirements.aspectRatio')
+    .optional()
+    .isIn(['9:16', '1:1', '16:9', '4:5'])
+    .withMessage('Aspect ratio must be one of: 9:16, 1:1, 16:9, 4:5'),
+
+  body('submissionRequirements.minDurationSec')
+    .optional({ checkFalsy: true })
+    .isInt({ min: 1 })
+    .withMessage('Min duration must be a positive integer')
+    .toInt(),
+
+  body('submissionRequirements.maxDurationSec')
+    .optional({ checkFalsy: true })
+    .isInt({ min: 1 })
+    .withMessage('Max duration must be a positive integer')
+    .toInt()
+    .custom((value, { req }) => {
+      const min = req.body.submissionRequirements?.minDurationSec;
+      if (value && min && parseInt(value) < parseInt(min)) {
+        throw new Error('Max duration must be greater than or equal to min duration');
+      }
+      return true;
+    }),
+
+  body('submissionRequirements.shariaNote').optional().trim().isString(),
+  body('submissionRequirements.offerCondition').optional().trim().isString(),
+  body('submissionRequirements.clipIdea').optional().trim().isString(),
+
+  body('maxSubmissionsPerCreator')
+    .optional({ nullable: true })
+    .isInt({ min: 1 })
+    .withMessage('Max submissions per creator must be a positive integer')
+    .toInt(),
 ];
 
 // ============================================

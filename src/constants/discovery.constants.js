@@ -44,6 +44,16 @@ const NOTIFICATION_TYPE = {
   APPLICATION_REJECTED: 'APPLICATION_REJECTED',
   FAVORITE_CAMPAIGN_UNAVAILABLE: 'FAVORITE_CAMPAIGN_UNAVAILABLE',
   BUDGET_EXHAUSTED: 'BUDGET_EXHAUSTED',                   // إشعار سبرنت 3 الداخلي الناقص
+  // Sprint 5
+  NEW_SUBMISSION: 'NEW_SUBMISSION',                       // للمعلن: محتوى جاهز للمراجعة
+  SUBMISSION_AI_APPROVED: 'SUBMISSION_AI_APPROVED',       // للمبدع
+  SUBMISSION_AI_REJECTED: 'SUBMISSION_AI_REJECTED',       // للمبدع
+  SUBMISSION_MANUAL_REVIEW: 'SUBMISSION_MANUAL_REVIEW',   // للمبدع: حُوّل لمراجعة يدوية
+  MANUAL_REVIEW_REQUIRED: 'MANUAL_REVIEW_REQUIRED',       // للأدمن
+  SUBMISSION_APPROVED: 'SUBMISSION_APPROVED',             // للمبدع
+  SUBMISSION_REJECTED: 'SUBMISSION_REJECTED',             // للمبدع
+  DOWNLOAD_COMPLETED: 'DOWNLOAD_COMPLETED',               // للمبدع (اختياري)
+  DOWNLOAD_FAILED: 'DOWNLOAD_FAILED',                     // للمبدع (اختياري)
 };
 
 module.exports = {

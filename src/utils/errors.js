@@ -33,6 +33,19 @@ const STATUS_BY_CODE = {
   REPORT_ALREADY_REVIEWED: 409,
   INVALID_TOKEN: 400,
   TOO_MANY_REQUESTS: 429,
+    // سبرنت 5 — التسليم والتنزيل
+  INVALID_LINK: 400,
+  UNSUPPORTED_PLATFORM: 400,
+  PLATFORM_MISMATCH: 400,
+  POST_NOT_PUBLIC: 422,
+  CONTENT_REQUIREMENTS_NOT_MET: 422,
+  LINK_ALREADY_SUBMITTED: 409,
+  SUBMISSION_LIMIT_REACHED: 409,
+  SUBMISSION_NOT_WITHDRAWABLE: 409,
+  SUBMISSION_NOT_EDITABLE: 409,
+  SUBMISSION_ALREADY_REVIEWED: 409,
+  DOWNLOAD_LINK_EXPIRED: 410,
+  APPLICATION_NOT_ACCEPTED: 403,
 };
 
 class AppError extends Error {
@@ -40,12 +53,14 @@ class AppError extends Error {
    * @param {string} message  رسالة مقروءة للمستخدم
    * @param {string} code     كود من STATUS_BY_CODE
    * @param {number} [statusCode] اختياري لتجاوز الافتراضي
+   * @param {Object} [details]    بيانات إضافية تُرجَع للفرونت في الحقل details
    */
-  constructor(message, code = 'INTERNAL_ERROR', statusCode) {
+  constructor(message, code = 'INTERNAL_ERROR', statusCode, details = null) {
     super(message);
     this.name = 'AppError';
     this.code = code;
     this.statusCode = statusCode || STATUS_BY_CODE[code] || 500;
+    this.details = details;
   }
 }
 
@@ -61,8 +76,8 @@ const sendError = (res, error, context = 'controller') => {
   let message = error.message;
   let status = error.statusCode;
 
+  // 1. معالجة أخطاء قاعدة البيانات (Mongo) والـ Validation
   if (error.code === 11000) {
-    // Mongo duplicate key
     code = 'CONFLICT';
     message = 'Duplicate record';
     status = 409;
@@ -81,20 +96,25 @@ const sendError = (res, error, context = 'controller') => {
 
   status = status || STATUS_BY_CODE[code] || 500;
 
+  // 2. الحماية الخاصة بك (تسجيل الخطأ وإخفاء الرسالة الحقيقية للـ 500)
   if (status >= 500) {
     console.error(`[${context}] error:`, error);
-    return res.status(status).json({
-      success: false,
-      message: 'Server error',
-      code: 'INTERNAL_ERROR',
-    });
+    message = 'Server error'; // إخفاء الرسالة الحقيقية
+    code = 'INTERNAL_ERROR';  // توحيد الكود
   }
 
-  return res.status(status).json({
+  // 3. بناء الاستجابة النهائية (مرة واحدة لكل الأخطاء بفضل كود الـ AI)
+  const body = {
     success: false,
-    message,
-    code: typeof code === 'string' ? code : 'VALIDATION_ERROR',
-  });
+    message: message,
+    code: typeof code === 'string' ? code : 'INTERNAL_ERROR', // تصحيح القيمة الافتراضية
+  };
+  
+  if (error.details) {
+    body.details = error.details;
+  }
+
+  return res.status(status).json(body);
 };
 
 module.exports = { AppError, STATUS_BY_CODE, getStatusFromCode, sendError };

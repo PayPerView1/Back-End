@@ -234,6 +234,79 @@ body('halalDeclaration').custom((value, { req }) => {
 
   return true;
 }),
+
+  // ============================================
+  // [Sprint 5] قواعد التحقق من متطلبات التقديم
+  // ============================================
+  body('submissionRequirements').optional(),
+
+  body('submissionRequirements.platforms')
+    .optional()
+    .isArray()
+    .withMessage('Platforms must be an array'),
+    // إذا كان لديك enum للـ PLATFORM يمكنك إضافته هكذا:
+    // .custom((value) => { const invalid = value.filter(v => !Object.values(PLATFORM).includes(v)); if(invalid.length) throw new Error(...); return true; })
+
+  body('submissionRequirements.requiredHashtags')
+    .optional()
+    .isArray()
+    .withMessage('Required hashtags must be an array'),
+
+  body('submissionRequirements.requiredKeywords')
+    .optional()
+    .isArray()
+    .withMessage('Required keywords must be an array'),
+
+  body('submissionRequirements.requiredMentions')
+    .optional()
+    .isArray()
+    .withMessage('Required mentions must be an array'),
+
+  body('submissionRequirements.aspectRatio')
+    .optional()
+    .isIn(['9:16', '1:1', '16:9', '4:5']) // يمكنك تعديل هذه القيم حسب الحاجة
+    .withMessage('Aspect ratio must be one of: 9:16, 1:1, 16:9, 4:5'),
+
+  body('submissionRequirements.minDurationSec')
+    .optional({ checkFalsy: true })
+    .isInt({ min: 1 })
+    .withMessage('Min duration must be a positive integer (in seconds)')
+    .toInt(),
+
+  body('submissionRequirements.maxDurationSec')
+    .optional({ checkFalsy: true })
+    .isInt({ min: 1 })
+    .withMessage('Max duration must be a positive integer (in seconds)')
+    .toInt()
+    .custom((value, { req }) => {
+      const min = req.body.submissionRequirements?.minDurationSec;
+      // التحقق من أن الحد الأقصى أكبر من أو يساوي الحد الأدنى
+      if (value && min && parseInt(value) < parseInt(min)) {
+        throw new Error('Max duration must be greater than or equal to min duration');
+      }
+      return true;
+    }),
+
+  body('submissionRequirements.shariaNote')
+    .optional()
+    .trim()
+    .isString(),
+
+  body('submissionRequirements.offerCondition')
+    .optional()
+    .trim()
+    .isString(),
+
+  body('submissionRequirements.clipIdea')
+    .optional()
+    .trim()
+    .isString(),
+
+  body('maxSubmissionsPerCreator')
+    .optional({ checkFalsy: true })
+    .isInt({ min: 1 })
+    .withMessage('Max submissions per creator must be a positive integer')
+    .toInt(),
   // body('halalDeclaration').custom((value) => {
   //   const { valid, missingFields } = validateHalalDeclaration(value);
 

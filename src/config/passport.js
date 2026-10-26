@@ -7,10 +7,11 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: '/api/v1/auth/google/callback',
+      // أزلنا callbackURL الثابت من هنا لأنه سيُحدد ديناميكياً
+      passReqToCallback: true, // مهم جداً لتمرير req للدالة أدناه
       proxy: true,
     },
-    async (accessToken, refreshToken, profile, done) => {
+    async (req, accessToken, refreshToken, profile, done) => { // أضفنا req في البداية
       try {
         // البحث عن المستخدم بـ googleId أو بالإيميل
         let user = await User.findOne({ email: profile.emails[0].value });
@@ -22,7 +23,7 @@ passport.use(
             email: profile.emails[0].value,
             role: 'BRAND',
             googleId: profile.id,
-            isVerified: true, // الحساب مفعل تلقائياً من Google
+            isVerified: true,
           });
         } else if (!user.googleId) {
           // ربط حساب Google بحساب محلي موجود سلفاً
