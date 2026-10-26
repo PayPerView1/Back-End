@@ -10,6 +10,7 @@ const { CAMPAIGN_ACTION, CAMPAIGN_STATUS } = require('../../constants/campaign.c
      'name', 'contentType', 'category', 'subCategories', 'totalBudget', 'cpm',
      'dailyBudgetLimit', 'brief', 'targetCountries', 'halalDeclared',
      'startDate', 'endDate', 'maxApplicants', 'requirements', 'coverImage',
+     'submissionRequirements', 'maxSubmissionsPerCreator',
    ];
 // ============================================
 // 6.1.1 — إنشاء مسودة جديدة
@@ -40,6 +41,8 @@ async function createDraft(advertiserId, draftData) {
     endDate: draftData.endDate || null,
     coverImage: draftData.coverImage || null,
     coverImagePublicId: draftData.coverImagePublicId || null, // ⬅️ تمت الإضافة
+    submissionRequirements: draftData.submissionRequirements || {},
+    maxSubmissionsPerCreator: draftData.maxSubmissionsPerCreator || null,
   });
 
   await logActivity(draft._id, CAMPAIGN_ACTION.CREATED, advertiserId, { type: 'DRAFT' });

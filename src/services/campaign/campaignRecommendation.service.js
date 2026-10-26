@@ -142,6 +142,8 @@ const getRecommendations = async (creatorId, limit = 10) => {
       remainingBudget: c.remainingBudget,
       totalBudget: c.totalBudget,
       targetCountries: c.targetCountries,
+      submissionRequirements: c.submissionRequirements || {},
+      maxSubmissionsPerCreator: c.maxSubmissionsPerCreator || null,
       isHalalVerified: true,
       availability,
       isFavorited: favoritedSet.has(c._id.toString()),

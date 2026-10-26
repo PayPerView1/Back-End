@@ -224,7 +224,11 @@ const getDiscoverCampaigns = async (creatorId, filters = {}) => {
       availability,
       unavailableReason,
       endDate: c.endDate,
+            // ⬇️ [Sprint 5]
+      submissionRequirements: c.submissionRequirements || {},
+      maxSubmissionsPerCreator: c.maxSubmissionsPerCreator || null,
       isFavorited: favoritedSet.has(c._id.toString()),
+      // sprint 4
       favoriteId: favoriteIdMap.get(c._id.toString()) || null,
       applicationStatus: appStatusMap.get(c._id.toString()) || null,
       createdAt: c.createdAt,
@@ -363,6 +367,9 @@ const getCampaignDetails = async (campaignId, creatorId) => {
     startDate: campaign.startDate,
     endDate: campaign.endDate,
     brief: campaign.brief,
+        // ⬇️ [Sprint 5]
+    submissionRequirements: campaign.submissionRequirements || {},
+    maxSubmissionsPerCreator: campaign.maxSubmissionsPerCreator || null,
     materials,
     canDownloadMaterials,
     maxApplicants: campaign.maxApplicants,

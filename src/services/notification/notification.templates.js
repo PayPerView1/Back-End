@@ -69,6 +69,59 @@ const TEMPLATES = {
     title: 'Campaign budget exhausted',
     message: `Your campaign "${campaignName}" has been paused because its budget is exhausted. Recharge it to continue.`,
   }),
+    // ===== Sprint 5 =====
+  // للمعلن: محتوى جاهز لقراره
+  [NOTIFICATION_TYPE.NEW_SUBMISSION]: ({ campaignName, creatorName }) => ({
+    title: 'New content to review',
+    message: `${creatorName || 'A creator'} submitted a clip for your campaign "${campaignName}". It is waiting for your decision.`,
+  }),
+
+  [NOTIFICATION_TYPE.SUBMISSION_AI_APPROVED]: ({ campaignName }) => ({
+    title: 'Clip passed the automatic review',
+    message: `Your clip for "${campaignName}" passed the automatic review and is waiting for the advertiser's approval.`,
+  }),
+
+  // reason: أول سبب رفض (اختياري)
+  [NOTIFICATION_TYPE.SUBMISSION_AI_REJECTED]: ({ campaignName, reason }) => ({
+    title: 'Clip needs changes',
+    message: `Your clip for "${campaignName}" does not meet the requirements.${
+      reason ? ` ${reason}` : ''
+    } Fix the post and submit it again.`,
+  }),
+
+  [NOTIFICATION_TYPE.SUBMISSION_MANUAL_REVIEW]: ({ campaignName }) => ({
+    title: 'Clip under manual review',
+    message: `Your clip for "${campaignName}" was sent to our review team. No action is needed from you.`,
+  }),
+
+  // للأدمن
+  [NOTIFICATION_TYPE.MANUAL_REVIEW_REQUIRED]: ({ campaignName, reasonCode }) => ({
+    title: 'Submission needs manual review',
+    message: `A submission for "${campaignName}" needs manual review${reasonCode ? ` (${reasonCode})` : ''}.`,
+  }),
+
+  // auto = true عند الاعتماد التلقائي
+  [NOTIFICATION_TYPE.SUBMISSION_APPROVED]: ({ campaignName, auto }) => ({
+    title: 'Clip approved',
+    message: auto
+      ? `Your clip for "${campaignName}" was approved automatically.`
+      : `Your clip for "${campaignName}" has been approved.`,
+  }),
+
+  [NOTIFICATION_TYPE.SUBMISSION_REJECTED]: ({ campaignName, note }) => ({
+    title: 'Clip rejected',
+    message: `Your clip for "${campaignName}" was rejected.${note ? ` Reason: ${note}` : ''}`,
+  }),
+
+  [NOTIFICATION_TYPE.DOWNLOAD_COMPLETED]: ({ campaignName }) => ({
+    title: 'Download completed',
+    message: `The source materials of "${campaignName}" were downloaded successfully.`,
+  }),
+
+  [NOTIFICATION_TYPE.DOWNLOAD_FAILED]: ({ campaignName }) => ({
+    title: 'Download failed',
+    message: `Downloading the source materials of "${campaignName}" failed. Please try again.`,
+  }),
 };
 
 /**

@@ -111,6 +111,20 @@ const campaignDraftSchema = new mongoose.Schema(
     },
     startDate: { type: Date, default: null },
     endDate: { type: Date, default: null },
+        // [Sprint 5]
+    submissionRequirements: {
+      platforms:        { type: [String], default: [] },
+      requiredHashtags: { type: [String], default: [] },
+      requiredKeywords: { type: [String], default: [] },
+      requiredMentions: { type: [String], default: [] },
+      aspectRatio:      { type: String, default: '9:16' },
+      minDurationSec:   { type: Number, default: null },
+      maxDurationSec:   { type: Number, default: null },
+      shariaNote:       { type: String, default: '' },
+      offerCondition:   { type: String, default: '' },
+      clipIdea:         { type: String, default: '' },
+    },
+    maxSubmissionsPerCreator: { type: Number, default: null },
   },
   {
     timestamps: true,

@@ -94,6 +94,21 @@ async function createCampaign(
         declaredAt: new Date(),
         ipAddress,
       },
+      // ⬇️ [Sprint 5] إضافة الحقول الجديدة
+      submissionRequirements: {
+        platforms:        campaignData.submissionRequirements?.platforms || [],
+        requiredHashtags: campaignData.submissionRequirements?.requiredHashtags || [],
+        requiredKeywords: campaignData.submissionRequirements?.requiredKeywords || [],
+        requiredMentions: campaignData.submissionRequirements?.requiredMentions || [],
+        aspectRatio:      campaignData.submissionRequirements?.aspectRatio || '9:16',
+        minDurationSec:   campaignData.submissionRequirements?.minDurationSec ?? null,
+        maxDurationSec:   campaignData.submissionRequirements?.maxDurationSec ?? null,
+        shariaNote:       campaignData.submissionRequirements?.shariaNote || '',
+        offerCondition:   campaignData.submissionRequirements?.offerCondition || '',
+        clipIdea:         campaignData.submissionRequirements?.clipIdea || '',
+      },
+      maxSubmissionsPerCreator: campaignData.maxSubmissionsPerCreator || null,
+      
       status: CAMPAIGN_STATUS.PENDING_REVIEW,
       submittedAt: new Date(),
     });

@@ -116,20 +116,41 @@ router.patch('/interests', protect, updateInterests);
 router.post('/logout', protect, logout);
 
 // 1. مسار توجيه المستخدم لصفحة Google
-router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'], prompt: 'select_account' }));
+// 1. مسار توجيه المستخدم لصفحة تسجيل الدخول في Google
+router.get('/google', (req, res, next) => {
+  // التقاط الدومين الحالي تلقائياً (سواء كان localhost أو Render)
+  const currentBaseUrl = `${req.protocol}://${req.get('host')}`;
+  const dynamicCallbackURL = `${currentBaseUrl}/api/v1/auth/google/callback`;
+
+  passport.authenticate('google', {
+    scope: ['profile', 'email'],
+    prompt: 'select_account',
+    callbackURL: dynamicCallbackURL // تمرير الرابط ديناميكياً هنا
+  })(req, res, next);
+});
 
 // 2. مسار العودة بعد نجاح تسجيل الدخول من Google
 router.get(
   '/google/callback',
-  passport.authenticate('google', { session: false, failureRedirect: `${process.env.FRONTEND_URL}/login?error=google_auth_failed`}),
+  (req, res, next) => {
+    // يجب استخدام نفس حساب الرابط الديناميكي هنا أيضاً لتطابق المطابقة مع Google
+    const currentBaseUrl = `${req.protocol}://${req.get('host')}`;
+    const dynamicCallbackURL = `${currentBaseUrl}/api/v1/auth/google/callback`;
+
+    passport.authenticate('google', {
+      session: false,
+      callbackURL: dynamicCallbackURL, // تمرير الرابط ديناميكياً هنا أيضاً
+      failureRedirect: `${process.env.FRONTEND_URL}/login?error=google_auth_failed`
+    })(req, res, next);
+  },
   (req, res) => {
     // توليد الـ JWT Token الخاص بنظامك
     const token = generateToken(req.user._id, req.user.role);
 
-    // إرجاع النتيجة فوراً للمتصفح لاختبار السيرفر
+    // إرجاع النتيجة للمتصفح
     res.redirect(
-  `${process.env.FRONTEND_URL}/auth/callback?token=${token}`
-);
+      `${process.env.FRONTEND_URL}/auth/callback?token=${token}`
+    );
   }
 );
 module.exports = router;

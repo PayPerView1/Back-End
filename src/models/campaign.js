@@ -7,6 +7,7 @@ const {
   AI_REVIEW_RESULT,
   PAUSE_REASON,
 } = require('../constants/campaign.constants');
+const { PLATFORM } = require('../constants/submission.constants');
 
 // ----------------------
 // Sub-schema: المواد المرفقة
@@ -297,6 +298,20 @@ const campaignSchema = new mongoose.Schema(
       ),
       default: () => ({}),
     },
+        // [Sprint 5]
+    submissionRequirements: {
+      platforms:        { type: [String], default: [] },
+      requiredHashtags: { type: [String], default: [] },
+      requiredKeywords: { type: [String], default: [] },
+      requiredMentions: { type: [String], default: [] },
+      aspectRatio:      { type: String, default: '9:16' },
+      minDurationSec:   { type: Number, default: null },
+      maxDurationSec:   { type: Number, default: null },
+      shariaNote:       { type: String, default: '' },
+      offerCondition:   { type: String, default: '' },
+      clipIdea:         { type: String, default: '' },
+    },
+    maxSubmissionsPerCreator: { type: Number, default: null },
   },
   {
     timestamps: true, // يضيف createdAt و updatedAt تلقائياً
@@ -351,6 +366,13 @@ campaignSchema.pre('validate', function () {
       'endDate',
       'End date must be after start date'
     );
+  }
+});
+
+campaignSchema.pre('validate', function () {
+  const r = this.submissionRequirements;
+  if (r && r.minDurationSec && r.maxDurationSec && r.maxDurationSec < r.minDurationSec) {
+    this.invalidate('submissionRequirements.maxDurationSec', 'Max duration must be >= min duration');
   }
 });
 
