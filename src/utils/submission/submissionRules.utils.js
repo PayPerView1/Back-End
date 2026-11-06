@@ -45,6 +45,24 @@ const isPlatformAllowed = (requirements, platform) => {
 };
 
 const evaluateRequirements = ({ requirements = {}, postMeta = null } = {}) => {
+  // =========================================================
+  // حارس: منشور غير موجود أو خاص => لا تسليم (لا تُقيَّم المتطلبات أصلاً)
+  // ملاحظة: verifyPost ترمي INVALID_LINK / POST_NOT_PUBLIC قبل الوصول هنا،
+  // فهذا الفرع احتياط لأي مستدعٍ آخر (مثل scripts/tryProvider.js).
+  // =========================================================
+  if (postMeta && (postMeta.fetchStatus === POST_FETCH_STATUS.NOT_FOUND || postMeta.fetchStatus === POST_FETCH_STATUS.PRIVATE)) {
+    return {
+      checks: [makeCheck('POST_EXISTS', CHECK_STATUS.FAILED, 'Post not found or is private', 'Make sure the link is public and valid', null)],
+      view: { hashtags: [], keywords: [], mentions: [], duration: null, allMet: false },
+      allMet: false,
+      canSubmit: false,
+      hasBlocking: true,
+      blocking: { missingHashtags: [], missingKeywords: [], missingMentions: [], duration: null },
+      verifiable: false,
+      warnings: ['POST_UNAVAILABLE'],
+    };
+  }
+
   const reqHashtags = asList(requirements.requiredHashtags);
   const reqKeywords = asList(requirements.requiredKeywords);
   const reqMentions = asList(requirements.requiredMentions);

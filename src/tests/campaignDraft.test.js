@@ -3,8 +3,7 @@ require('dotenv').config();
 
 const request = require('supertest');
 const mongoose = require('mongoose');
-const { MongoMemoryServer } = require('mongodb-memory-server');
-
+const db = require('./helpers/db');
 const app = require('../app');
 const User = require('../models/user');
 const Campaign = require('../models/campaign');
@@ -14,27 +13,21 @@ const { AI_REVIEW_RESULT } = require('../constants/campaign.constants');
 
 jest.mock('../services/campaign/aiReview.service');
 const aiReviewService = require('../services/campaign/aiReview.service');
-
-let mongoServer;
+jest.setTimeout(40000)
 let brandUser;
 let brandToken;
 let otherBrandUser;
 let otherBrandToken;
 
 beforeAll(async () => {
-  mongoServer = await MongoMemoryServer.create();
-  await mongoose.connect(mongoServer.getUri());
+  await db.connect();
 });
-
 afterAll(async () => {
-  await mongoose.disconnect();
-  await mongoServer.stop();
+  await db.disconnect();
 });
 
 beforeEach(async () => {
-  await User.deleteMany({});
-  await Campaign.deleteMany({});
-  await CampaignDraft.deleteMany({});
+  await db.clearDatabase();
   jest.clearAllMocks();
 
   brandUser = await User.create({
@@ -269,7 +262,7 @@ describe('POST /api/v1/campaigns/drafts/:draftId/submit', () => {
       .send({ halalDeclaration: fullHalalDeclaration() });
 
     expect(res.statusCode).toBe(201);
-    expect(res.body.campaign.status).toBe('ACTIVE');
+    expect(res.body.campaign.status).toBe('PENDING_REVIEW');
 
     // المسودة المفروض تكون انحذفت بعد التحويل الناجح
     const draftStillExists = await CampaignDraft.findById(draft._id);

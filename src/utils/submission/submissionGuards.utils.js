@@ -15,7 +15,7 @@ const { AppError } = require('../errors');
 const { APPLICATION_STATUS } = require('../../constants/discovery.constants');
 const { LINK_HOLDING_STATUSES, SUBMISSION_CONFIG } = require('../../constants/submission.constants');
 const { isOpenForApplications } = require('../campaign/campaignVisibility.utils');
-
+const { CAMPAIGN_STATUS } = require('../../constants/campaign.constants');
 /**
  * يجلب طلب المبدع المقبول.
  *  - بالـ applicationId: NOT_FOUND إن لم يوجد أو كان لمبدع آخر (لا نكشف وجوده).
@@ -68,6 +68,16 @@ const assertWithinSubmissionLimit = async (creatorId, campaign) => {
   return { active, limit };
 };
 
+/** حملة لا تسمح بالتنزيل: موقوفة بسبب بلاغ، مؤرشفة، أو ملغاة (تُستعمل في القائمة وإصدار الروابط والبث) */
+const assertCampaignAllowsDownloads = (campaign) => {
+  if (
+    campaign.isSuspended === true ||
+    campaign.isArchived === true ||
+    campaign.status === CAMPAIGN_STATUS.CANCELLED
+  ) {
+    throw new AppError('This campaign is currently unavailable.', 'CAMPAIGN_UNAVAILABLE');
+  }
+};
 module.exports = {
   getAcceptedApplication,
   isOpenForSubmissions,
@@ -75,4 +85,5 @@ module.exports = {
   getSubmissionLimit,
   countActiveSubmissions,
   assertWithinSubmissionLimit,
+  assertCampaignAllowsDownloads,
 };

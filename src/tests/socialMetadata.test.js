@@ -1,3 +1,4 @@
+// src/tests/socialMetadata.test.js
 const { normalizeMeta, fetchPostMetadata, withTimeout } = require('../services/social/socialMetadata.service');
 
 describe('socialMetadata', () => {

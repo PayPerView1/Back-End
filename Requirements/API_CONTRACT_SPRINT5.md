@@ -63,6 +63,7 @@ Errors may now include an optional `details` object:
 | `SUBMISSION_NOT_EDITABLE` | 409 | Link update / resubmit not allowed in the current state |
 | `SUBMISSION_ALREADY_REVIEWED` | 409 | Brand/admin decision already taken |
 | `DOWNLOAD_LINK_EXPIRED` | 410 | Download link expired or already used |
+| `DOWNLOAD_SOURCE_UNAVAILABLE` | 502 | The file could not be served from Cloudinary (upstream unreachable, delivery denied, or larger than the 25 MB cap) |
 | `APPLICATION_NOT_ACCEPTED` | 403 | Creator is not accepted into this campaign |
 
 Reused: `VALIDATION_ERROR`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `CAMPAIGN_UNAVAILABLE`, `TOO_MANY_REQUESTS`, `INTERNAL_ERROR`.
@@ -178,14 +179,30 @@ POST /api/v1/applications/:id/materials/download-all
 ```
 `strategy` may become `"ARCHIVE"` later (single ZIP link) — the frontend should branch on it.
 
-### 3.4 Redeem a Link `[PUBLIC-TOKEN]`
+### 3.4 Redeem a Link — `CLIPPER`
 
 ```
 GET /api/v1/materials/download/:token
 ```
-Valid → logs the download (`STARTED`, `consumedAt`), writes **one** `MATERIALS_DOWNLOADED` entry in the campaign activity log per creator per campaign (first download only), and answers **`302`** to the file with `Content-Disposition: attachment`.
+Requires `Authorization: Bearer <JWT>` of the **same creator** the link was issued to (decision D2: the link alone is not enough). The token carries `{ lid, uid }` = `logId` + `creatorId`.
 
-**Errors (JSON):** `410 DOWNLOAD_LINK_EXPIRED` (expired or already used), `403 FORBIDDEN` (access revoked meanwhile, e.g. campaign cancelled).
+Valid → consumes the link atomically (`STARTED`, `consumedAt`), writes **one** `MATERIALS_DOWNLOADED` entry in the campaign activity log per creator per campaign (first successful download only), and **streams the file** (`200`) with:
+
+| Header | Value |
+|---|---|
+| `Content-Type` | the material's `mimeType` from our DB (not from the source) |
+| `Content-Disposition` | `attachment; filename="..."; filename*=UTF-8''...` |
+| `Content-Length` | upstream length, when declared |
+| `Cache-Control` | `no-store` |
+| `X-Content-Type-Options` | `nosniff` |
+
+> **Deviation from draft 1:** the response is a **binary stream** (`200`), not a `302` redirect to Cloudinary. The raw `fileUrl` is never exposed. Files are capped at 25 MB; the source must be `https` on `res.cloudinary.com` (SSRF guard).
+
+**Consumption order:** the link is consumed **before** the access re-check (race-safe, strictly single use). If the re-check fails, the log is marked `FAILED` and the link stays burned — the creator must request a new one.
+
+**Errors (JSON):** `410 DOWNLOAD_LINK_EXPIRED` (expired or already used), `403 FORBIDDEN` (the token belongs to another creator), `403 APPLICATION_NOT_ACCEPTED` (acceptance revoked meanwhile), `409 CAMPAIGN_UNAVAILABLE` (campaign cancelled / suspended / archived meanwhile), `404 NOT_FOUND` (material or campaign deleted meanwhile), `502 DOWNLOAD_SOURCE_UNAVAILABLE` (Cloudinary unreachable, delivery denied, or file larger than the cap).
+
+**Frontend note:** request it as binary (`responseType: 'blob'`, or `fetch` → `blob()`); do not parse the body as JSON. Failures are JSON with the codes above.
 
 ### 3.5 Report Download Result (optional)
 
@@ -776,7 +793,7 @@ On `REJECTED`, every `FAILED` check becomes a `rejectionReasons` entry, so each 
 | 1 | GET | `/applications/:id/materials` | Creator | List materials (changed) |
 | 2 | POST | `/applications/:id/materials/:materialId/download-link` | Creator | Single-use link for one file |
 | 3 | POST | `/applications/:id/materials/download-all` | Creator | Links for all files |
-| 4 | GET | `/materials/download/:token` | Token | Redeem link (302) |
+| 4 | GET | `/materials/download/:token` | Creator + Token | Redeem link (streams the file, `200`) |
 | 5 | PATCH | `/downloads/:logId` | Creator | Report download result |
 | 6 | GET | `/campaigns/:campaignId/downloads` | Brand | Who downloaded |
 | 7 | GET | `/submissions/eligible-campaigns` | Creator | Campaigns ready for delivery |

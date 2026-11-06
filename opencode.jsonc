@@ -1,0 +1,44 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+
+  // ============================================================
+  // .opencodeignore  (equivalent)
+  // Hard denies: these paths never reach the model.
+  // `policies` override agent rules AND "allow always" approvals.
+  // ============================================================
+  "policies": [
+    { "action": "tool.use", "resource": "read:*node_modules*",      "effect": "deny" },
+    { "action": "tool.use", "resource": "read:*.aider*",            "effect": "deny" },
+    { "action": "tool.use", "resource": "read:*package-lock.json",  "effect": "deny" },
+    { "action": "tool.use", "resource": "read:*coverage*",          "effect": "deny" },
+    { "action": "tool.use", "resource": "read:*dist*",              "effect": "deny" },
+
+    // Secrets: deny every .env variant, then re-allow the safe example.
+    { "action": "tool.use", "resource": "read:*.env*",              "effect": "deny" },
+    { "action": "tool.use", "resource": "read:*.env.example",       "effect": "allow" },
+
+    // Stop globbing into dependency/build folders.
+    { "action": "tool.use", "resource": "glob:*node_modules*",      "effect": "deny" },
+    { "action": "tool.use", "resource": "glob:*package-lock*",      "effect": "deny" }
+  ],
+
+  // ============================================================
+  // Keep the context lean
+  // ============================================================
+//  "compaction": {
+//    "auto": true,
+//    "keep": { "tokens": 12000 },
+//    "buffer": "20%"
+//  },
+
+  // Trim oversized tool output (defaults shown, kept explicit)
+//  "tool_output": {
+//    "max_lines": 2000,
+//    "max_bytes": 51200
+//  },
+
+  // Reduce watcher load. NOTE: this does NOT block reads.
+  "watcher": {
+    "ignore": ["node_modules/**", "uploads/**", "coverage/**", ".aider*"]
+  }
+}

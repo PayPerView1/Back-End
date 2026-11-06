@@ -114,7 +114,6 @@ const updateDraft = async (req, res) => {
       draft: updatedDraft,
     });
   } catch (error) {
-    console.error(`[campaignDraft.controller] updateDraft error: ${error.message}`);
     const statusCode = error.statusCode || 500;
     res.status(statusCode).json({
       success: false,
@@ -163,7 +162,6 @@ const autoSaveDraft = async (req, res) => {
       draft: updatedDraft,
     });
   } catch (error) {
-    console.error(`[campaignDraft.controller] autoSaveDraft error: ${error.message}`);
     const statusCode = error.statusCode || 500;
     res.status(statusCode).json({
       success: false,
@@ -188,7 +186,6 @@ const submitDraft = async (req, res) => {
       campaign,
     });
   } catch (error) {
-    console.error(`[campaignDraft.controller] submitDraft error: ${error.message}`);
     res.status(500).json({ success: false, message: 'Server error while submitting draft' });
   }
 };

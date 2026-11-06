@@ -54,9 +54,18 @@ const fetchPost = async ({ canonicalUrl }) => {
     return { fetchStatus: POST_FETCH_STATUS.UNAVAILABLE };
   }
 
-  // رد 200 بمحتوى خطأ ({ code, message }) بدل بيانات الفيديو
-  const looksLikeVideo = data.author_name || data.author_url || data.author_unique_id || data.html;
-  if (!looksLikeVideo) {
+  // للفيديو الموجود يعطي oEmbed بيانات خاصة به: title (الوصف) و author_name و author_url و thumbnail_url.
+  // رد 200 بلا أي منها (حقول عامة فقط: html / width / height ...) يعني أن الفيديو غير موجود.
+  // لوحظ هذا فعلاً مع معرّف فيديو وهمي: iframe عام بلا بيانات (وكذلك ردود { code, message }).
+  // ⚠️ إن ظهر هذا الشكل نفسه لفيديو **حقيقي** فالافتراض خاطئ: غيّر الحالة هنا إلى UNAVAILABLE.
+  const hasVideoMetadata =
+    typeof data.title === 'string' ||
+    data.author_name ||
+    data.author_url ||
+    data.author_unique_id ||
+    data.thumbnail_url;
+  if (!hasVideoMetadata) {
+    console.warn('[tiktok.provider] oEmbed returned no video metadata (treated as NOT_FOUND)');
     return { fetchStatus: POST_FETCH_STATUS.NOT_FOUND };
   }
 

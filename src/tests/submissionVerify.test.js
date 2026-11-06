@@ -1,4 +1,6 @@
+// src/tests/submissionVerify.test.js
 // يحتاج قاعدة بيانات (db.js). يُحاكى فقط جلب بيانات المنشور (الشبكة).
+require('dotenv').config();
 jest.mock('../services/social/socialMetadata.service', () => ({ fetchPostMetadata: jest.fn() }));
 
 const db = require('./helpers/db');
@@ -6,7 +8,7 @@ const f = require('./helpers/factories');
 const { fetchPostMetadata } = require('../services/social/socialMetadata.service');
 const { verifyPost } = require('../services/submission/submissionVerify.service');
 
-jest.setTimeout(120000);
+jest.setTimeout(40000);
 beforeAll(db.connect);
 afterEach(async () => {
   await db.clearDatabase();

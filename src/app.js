@@ -27,14 +27,15 @@ const favoriteRoutes           = require('./routes/creator/favorite.routes');
 const creatorPreferencesRoutes = require('./routes/creator/creatorPreferences.routes');
 const notificationRoutes       = require('./routes/notification/notification.routes');
 // Sprint 5 imports
-// const materialRoutes        = require('./routes/material/material.routes');
-// const submissionRoutes      = require('./routes/submission/submission.routes');
-// const submissionAdminRoutes = require('./routes/admin/submissionAdmin.routes');
+const materialRoutes        = require('./routes/material/material.routes');
+const submissionRoutes      = require('./routes/submission/submission.routes');
+const submissionAdminRoutes = require('./routes/admin/submissionAdmin.routes');
 const app = express();
 app.use(passport.initialize());
 
 // Middlewares أساسية
 app.use(cors());
+app.set('trust proxy', 1);
 // ⚠️ لازم يجي قبل express.json() — عشان PayPal webhook يحتاج raw body للتحقق من الـ signature
 app.use(
   '/api/v1/wallet/paypal/webhook',
@@ -68,7 +69,9 @@ app.use('/api/v1/wallet', walletFundingRoutes); // /, /fund, /bank-details, webh
 // Admin wallet routes: PUT /bank-transfer/:id و PUT /refund/:id
 // (بادئة /admin مجرد تنظيم للمسارات؛ الحماية الفعلية adminOnly داخل الـ router)
 app.use('/api/v1/admin/wallet', walletAdminRoutes);
-// app.use('/api/v1/admin', submissionAdminRoutes);
+// ⚠️ مسارات الأدمن للتسليم معرّفة داخل الـ router بمسارها الكامل (/admin/submissions/...)
+//    لذلك يُركَّب على /api/v1 وليس /api/v1/admin وإلا صارت البادئة مكرّرة.
+app.use('/api/v1', submissionAdminRoutes);
 // ═══════════════════════════════════════════════════════════════
 // Sprint 4 — Discovery, Applications, Reports, Favorites, Notifications
 // ⚠️ لازم تجي قبل campaignCreationRoutes و campaignManagementRoutes (وأي router مركَّب
@@ -93,8 +96,8 @@ app.use('/api/v1/notifications', notificationRoutes);
 // ⚠️ لازم قبل app.use('/api/v1/campaigns/:campaignId', campaignBudgetRoutes)
 // materialRoutes و submissionRoutes: مركَّبة على /api/v1 ومساراتها كاملة (المبدع/المعلن/token)
 // ═══════════════════════════════════════════════════════════════
-// app.use('/api/v1', materialRoutes);
-// app.use('/api/v1', submissionRoutes);
+app.use('/api/v1', materialRoutes);
+app.use('/api/v1', submissionRoutes);
 
 // Campaign budget routes
 // مركَّب على /api/v1/campaigns ومساراته /:campaignId/budget ... (الـ middleware على كل route)

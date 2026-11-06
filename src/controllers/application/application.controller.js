@@ -1,3 +1,4 @@
+// src/controllers/application/application.controller.js
 const { AppError, sendError } = require('../../utils/errors');
 const applicationService = require('../../services/application/application.service');
 
