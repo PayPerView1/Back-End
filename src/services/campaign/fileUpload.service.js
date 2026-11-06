@@ -185,19 +185,6 @@ function getPublicIdFromUrl(url) {
 // ============================================
 // 2.1.6 دالة الحذف من Cloudinary
 // ============================================
-async function deleteFilesFromStorage(items) {
-  if (!items || items.length === 0) return;
-  for (const item of items) {
-    try {
-      if (item.publicId) {
-        await cloudinary.uploader.destroy(item.publicId, { resource_type: item.resourceType || 'image' });
-      }
-    } catch (error) {
-      console.error(`[fileUpload.service] Delete error:`, error.message);
-    }
-  }
-}
-
 /**
  * @param {Array<{publicId:string, resourceType:string}|string>} items
  *        إما objects ({publicId, resourceType}) أو URLs (legacy)

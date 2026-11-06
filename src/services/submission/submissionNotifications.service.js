@@ -125,61 +125,9 @@ const notifyDownloadResult = safe('notifyDownloadResult', async (log, campaign, 
   );
 });
 
-// ----------------------
-// Sprint 5 — التسليم
-// ----------------------
+// ملاحظة: رسائل البريد الخاصة بـ Sprint 5 تعيش في notification/notificationEmails.js
+// (هناك sendEmail و escapeHtml) — لا تُكرّرها هنا.
 
-/** للمعلن: محتوى جاهز لقراره */
-const sendNewSubmissionEmail = (advertiser, { campaignName, creatorName }) =>
-  sendEmail({
-    email: advertiser.email,
-    subject: 'New content ready for your review',
-    message: `<b>${escapeHtml(creatorName || 'A creator')}</b> submitted a clip for your campaign "<b>${escapeHtml(campaignName)}</b>". Review it from your campaign page.`,
-  });
-
-/** للمبدع: رفضه الفحص الآلي (reason = أول سبب) */
-const sendSubmissionAiRejectedEmail = (creator, { campaignName, reason }) =>
-  sendEmail({
-    email: creator.email,
-    subject: 'Your clip needs changes',
-    message: `Your clip for the campaign "<b>${escapeHtml(campaignName)}</b>" does not meet the requirements.${
-      reason ? `<br/>${escapeHtml(reason)}` : ''
-    }<br/>Fix the post and submit it again from your dashboard.`,
-  });
-
-/** للمبدع: اعتُمد التسليم (auto = اعتماد تلقائي) */
-const sendSubmissionApprovedEmail = (creator, { campaignName, auto }) =>
-  sendEmail({
-    email: creator.email,
-    subject: 'Your clip has been approved',
-    message: `Your clip for the campaign "<b>${escapeHtml(campaignName)}</b>" ${
-      auto ? 'was approved automatically.' : 'has been approved.'
-    }`,
-  });
-
-/** للمبدع: رفضه المعلن أو المدقق */
-const sendSubmissionRejectedEmail = (creator, { campaignName, note }) =>
-  sendEmail({
-    email: creator.email,
-    subject: 'Update on your clip',
-    message: `Your clip for the campaign "<b>${escapeHtml(campaignName)}</b>" was rejected.${
-      note ? `<br/>Reason: ${escapeHtml(note)}` : ''
-    }`,
-  });
-
-/** لفريق المراجعة (بريد واحد إلى MODERATION_TEAM_EMAIL) */
-const sendManualReviewAdminEmail = ({ campaignName, reasonCode, submissionId }) => {
-  const to = process.env.MODERATION_TEAM_EMAIL;
-  if (!to) return Promise.resolve(null);
-
-  return sendEmail({
-    email: to,
-    subject: 'Submission needs manual review',
-    message: `A submission for "<b>${escapeHtml(campaignName)}</b>" needs manual review.<br/>Reason: ${escapeHtml(
-      reasonCode || 'N/A'
-    )}<br/>Submission ID: ${escapeHtml(submissionId)}`,
-  });
-};
 module.exports = {
   notifyBrandNewSubmission,
   notifyCreatorAiApproved,
@@ -189,9 +137,4 @@ module.exports = {
   notifyCreatorApproved,
   notifyCreatorRejected,
   notifyDownloadResult,
-  sendNewSubmissionEmail,
-  sendSubmissionAiRejectedEmail,
-  sendSubmissionApprovedEmail,
-  sendSubmissionRejectedEmail,
-  sendManualReviewAdminEmail,
 };

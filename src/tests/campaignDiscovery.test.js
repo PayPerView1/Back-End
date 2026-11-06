@@ -6,13 +6,15 @@ require('dotenv').config();
 
 const request = require('supertest');
 const mongoose = require('mongoose');
-const { MongoMemoryServer } = require('mongodb-memory-server');
-
+const db = require('./helpers/db');
 const app = require('../app');
 const User = require('../models/user');
 const Campaign = require('../models/campaign');
 const Favorite = require('../models/favorite');
 const generateToken = require('../utils/generateTokens');
+
+// ⚠️ مهلة أطول: أول تشغيل / اتصال قد يكون بطيئاً
+jest.setTimeout(40000);
 
 // ⚠️ الـ emailService و paypal معملهم mock
 jest.mock('../services/emailService', () => ({
@@ -31,19 +33,16 @@ jest.mock('../services/emailService', () => ({
 
 jest.mock('../services/wallet/paypal.service');
 
-let mongoServer;
 let clipperUser, clipperToken;
 let brandUser, brandToken;
 let activeCampaign, pausedCampaign, suspendedCampaign;
 
 beforeAll(async () => {
-  mongoServer = await MongoMemoryServer.create();
-  await mongoose.connect(mongoServer.getUri());
+  await db.connect();          // ✅ استدعاء فعلي
 });
 
 afterAll(async () => {
-  await mongoose.disconnect();
-  await mongoServer.stop();
+  await db.disconnect();       // ✅ استدعاء فعلي
 });
 
 beforeEach(async () => {
@@ -159,28 +158,46 @@ describe('GET /api/v1/campaigns/discover', () => {
     expect(res.statusCode).toBe(401);
   });
 
-  it('✅ فلترة بـ contentType', async () => {
+  it('✅ فلترة بـ contentType=UGC', async () => {
     const res = await request(app)
       .get('/api/v1/campaigns/discover?contentType=UGC')
       .set('Authorization', `Bearer ${clipperToken}`);
 
     expect(res.statusCode).toBe(200);
+
+    // ✅ نتأكد أن المصفوفة ليست فارغة (وإلا every ترجع true زوراً)
+    expect(res.body.data.length).toBeGreaterThan(0);
+
     const all = res.body.data.every(
       (c) => c.contentType === 'UGC' || c.subCategories?.includes('UGC')
     );
     expect(all).toBe(true);
+
+    // ✅ تأكيد إضافي: الحملة النشطة (CLIPPING) غير موجودة
+    const ids = res.body.data.map((c) => c.id);
+    expect(ids).not.toContain(activeCampaign._id.toString());
+    // ✅ الحملة paused (UGC) موجودة
+    expect(ids).toContain(pausedCampaign._id.toString());
   });
 
-  it('✅ فلترة بـ countries', async () => {
+  it('✅ فلترة بـ countries=EGY', async () => {
     const res = await request(app)
       .get('/api/v1/campaigns/discover?countries=EGY')
       .set('Authorization', `Bearer ${clipperToken}`);
 
     expect(res.statusCode).toBe(200);
-    const hasEgy = res.body.data.every(
-      (c) => c.targetCountries?.includes('EGY')
+
+    // ✅ نتأكد أن المصفوفة ليست فارغة
+    expect(res.body.data.length).toBeGreaterThan(0);
+
+    const hasEgy = res.body.data.every((c) =>
+      c.targetCountries?.includes('EGY')
     );
     expect(hasEgy).toBe(true);
+
+    // ✅ تأكيد إضافي: الحملة النشطة (SAU/ARE) غير موجودة
+    const ids = res.body.data.map((c) => c.id);
+    expect(ids).not.toContain(activeCampaign._id.toString());
   });
 
   it('✅ فلترة بـ minCpm و maxCpm', async () => {
@@ -189,6 +206,10 @@ describe('GET /api/v1/campaigns/discover', () => {
       .set('Authorization', `Bearer ${clipperToken}`);
 
     expect(res.statusCode).toBe(200);
+
+    // ✅ نتأكد أن المصفوفة ليست فارغة
+    expect(res.body.data.length).toBeGreaterThan(0);
+
     const inRange = res.body.data.every((c) => c.cpm >= 1 && c.cpm <= 2);
     expect(inRange).toBe(true);
   });
@@ -268,37 +289,4 @@ describe('GET /api/v1/campaigns/:campaignId/details', () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it('✅ materials ما تحتوي fileUrl الأصلي', async () => {
-    const campaignWithMaterial = await Campaign.create({
-      advertiserId: brandUser._id,
-      name: 'With Material',
-      contentType: 'CLIPPING',
-      category: 'CLIPPING',
-      totalBudget: 1000,
-      remainingBudget: 500,
-      cpm: 1.5,
-      brief: { mainIdea: 'Test' },
-      targetCountries: ['SAU'],
-      status: 'ACTIVE',
-      walletId: new mongoose.Types.ObjectId(),
-      materials: [
-        {
-          fileName: 'test.mp4',
-          fileUrl: 'https://res.cloudinary.com/demo/video/upload/v1/test.mp4',
-          fileType: 'VIDEO',
-          fileSizeKb: 1000,
-          mimeType: 'video/mp4',
-          uploadedBy: brandUser._id,
-        },
-      ],
-    });
-
-    const res = await request(app)
-      .get(`/api/v1/campaigns/${campaignWithMaterial._id}/details`)
-      .set('Authorization', `Bearer ${clipperToken}`);
-
-    expect(res.statusCode).toBe(200);
-    expect(res.body.data.materials[0].fileUrl).toBeUndefined();
-    expect(res.body.data.materials[0].previewUrl).toBeDefined();
-  });
 });

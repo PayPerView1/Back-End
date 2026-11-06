@@ -6,14 +6,16 @@ require('dotenv').config();
 
 const request = require('supertest');
 const mongoose = require('mongoose');
-const { MongoMemoryServer } = require('mongodb-memory-server');
 
+const db = require('./helpers/db');
 const app = require('../app');
 const User = require('../models/user');
 const Campaign = require('../models/campaign');
 const Application = require('../models/application');
 const CreatorPreferences = require('../models/creatorPreferences');
 const generateToken = require('../utils/generateTokens');
+
+jest.setTimeout(40000);
 
 jest.mock('../services/emailService', () => ({
   sendEmail: jest.fn().mockResolvedValue(true),
@@ -31,26 +33,20 @@ jest.mock('../services/emailService', () => ({
 
 jest.mock('../services/wallet/paypal.service');
 
-let mongoServer;
 let clipperUser, clipperToken;
 let brandUser, brandToken;
 let campaignSau, campaignEgy, campaignUgc;
 
 beforeAll(async () => {
-  mongoServer = await MongoMemoryServer.create();
-  await mongoose.connect(mongoServer.getUri());
+  await db.connect();
 });
 
 afterAll(async () => {
-  await mongoose.disconnect();
-  await mongoServer.stop();
+  await db.disconnect();
 });
 
 beforeEach(async () => {
-  await User.deleteMany({});
-  await Campaign.deleteMany({});
-  await Application.deleteMany({});
-  await CreatorPreferences.deleteMany({});
+  await db.clearDatabase();
   jest.clearAllMocks();
 
   clipperUser = await User.create({
@@ -289,7 +285,10 @@ describe('GET /api/v1/campaigns/discover?sort=bestMatch', () => {
       .set('Authorization', `Bearer ${clipperToken}`);
 
     expect(res.statusCode).toBe(200);
-    // ما في تفضيلات → كل matchScore = 0
+
+    // ✅ منع النجاح الزائف على مصفوفة فارغة
+    expect(res.body.data.length).toBeGreaterThan(0);
+    
     res.body.data.forEach((c) => {
       expect(c.matchScore).toBe(0);
     });

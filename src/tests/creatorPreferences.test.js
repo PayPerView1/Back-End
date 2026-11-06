@@ -6,12 +6,14 @@ require('dotenv').config();
 
 const request = require('supertest');
 const mongoose = require('mongoose');
-const { MongoMemoryServer } = require('mongodb-memory-server');
 
+const db = require('./helpers/db');                    // ✅ جديد
 const app = require('../app');
 const User = require('../models/user');
 const CreatorPreferences = require('../models/creatorPreferences');
 const generateToken = require('../utils/generateTokens');
+
+jest.setTimeout(40000);                               // ✅ جديد
 
 jest.mock('../services/emailService', () => ({
   sendEmail: jest.fn().mockResolvedValue(true),
@@ -29,23 +31,19 @@ jest.mock('../services/emailService', () => ({
 
 jest.mock('../services/wallet/paypal.service');
 
-let mongoServer;
 let clipperUser, clipperToken;
 let brandUser, brandToken;
 
 beforeAll(async () => {
-  mongoServer = await MongoMemoryServer.create();
-  await mongoose.connect(mongoServer.getUri());
+  await db.connect();
 });
 
 afterAll(async () => {
-  await mongoose.disconnect();
-  await mongoServer.stop();
+  await db.disconnect();
 });
 
 beforeEach(async () => {
-  await User.deleteMany({});
-  await CreatorPreferences.deleteMany({});
+  await db.clearDatabase();
   jest.clearAllMocks();
 
   clipperUser = await User.create({

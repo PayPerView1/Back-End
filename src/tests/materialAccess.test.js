@@ -1,9 +1,11 @@
+// src/tests/materialAccess.test.js
 // مهمة A5.0: لا يحصل على روابط المواد إلا المبدع المقبول (كان الشرط معلّقاً)
+require ('dotenv').config();
 const db = require('./helpers/db');
 const f = require('./helpers/factories');
 const { getAcceptedMaterials } = require('../services/application/application.service');
 
-jest.setTimeout(120000);
+jest.setTimeout(40000);
 beforeAll(db.connect);
 afterEach(db.clearDatabase);
 afterAll(db.disconnect);
@@ -39,9 +41,14 @@ const errorOf = async (promise) => {
 describe('getAcceptedMaterials', () => {
   test('المبدع المقبول يحصل على الملفات', async () => {
     const s = await setup();
-    const items = await getAcceptedMaterials(s.application._id, s.creator._id);
-    expect(items).toHaveLength(1);
-    expect(items[0].fileName).toBe('intro.mp4');
+    const result = await getAcceptedMaterials(s.application._id, s.creator._id);
+
+    // الدالة ترجع DTO وليس مصفوفة: { applicationId, campaignId, summary, canDownloadAll, items }
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].fileName).toBe('intro.mp4');
+    expect(result.items[0]).not.toHaveProperty('fileUrl');
+    expect(result.canDownloadAll).toBe(true);
+    expect(result.summary).toEqual({ count: 1, totalSizeKb: 8200 });
   });
 
   test.each(['PENDING', 'REJECTED', 'WITHDRAWN'])('طلب %s ممنوع', async (status) => {

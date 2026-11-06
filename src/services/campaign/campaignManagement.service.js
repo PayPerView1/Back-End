@@ -221,10 +221,12 @@ const copyCampaign = async (campaignId, advertiserId, options = {}) => {
   }
 
   // ── بناء بيانات المسودة الجديدة ─────────────────────────────
-
+  
   const draftData = {
     advertiserId,
     name: newName || `${original.name} (Copy)`,
+    coverImage: original.coverImage,
+    coverImagePublicId: original.null,
     contentType:    original.contentType,
     category:       original.category,
     subCategories:  original.subCategories,
@@ -238,6 +240,10 @@ const copyCampaign = async (campaignId, advertiserId, options = {}) => {
       minFollowers: original.requirements?.minFollowers ?? null,
       minRating: original.requirements?.minRating ?? null,
     },
+    // ⬇️ [Sprint 5] نسخ الحقول الجديدة
+    submissionRequirements: original.submissionRequirements,
+    maxSubmissionsPerCreator: original.maxSubmissionsPerCreator,
+    
     copyInfo: { isCopy: true, copiedFromId: original._id },
     // إعلان الحلال — نرجع للـ false لأن المعلن يجب أن يُعلن من جديد
     halalDeclared:  false,
@@ -250,12 +256,15 @@ const copyCampaign = async (campaignId, advertiserId, options = {}) => {
           fileSizeKb: m.fileSizeKb,
           mimeType:   m.mimeType,
           uploadedBy: advertiserId,
+          // ⬇️ إضافة الحقول الخاصة بـ Cloudinary لكي يتمكن الحذف لاحقاً
+          publicId:     m.publicId,
+          resourceType: m.resourceType,
         }))
       : [],
   };
   if (includeTargetAudience) {
-  draftData.targetCountries = original.targetCountries;
-}
+    draftData.targetCountries = original.targetCountries;
+  }
 
   const draft = await CampaignDraft.create(draftData);
 

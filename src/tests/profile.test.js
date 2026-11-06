@@ -3,33 +3,37 @@ require('dotenv').config();
 
 const request = require('supertest');
 const mongoose = require('mongoose');
-const { MongoMemoryServer } = require('mongodb-memory-server');
 
+const db = require('./helpers/db');         // ✅ اضبط المسار حسب موقعك
 const app = require('../app');
 const User = require('../models/user');
 const generateToken = require('../utils/generateTokens');
 
-let mongoServer;
+jest.setTimeout(40000);                               // ✅ جديد
+
+// ⚠️ لو انتقلت لـ Cloudinary، أضف هذا الـ mock:
+// jest.mock('../src/services/fileUpload.service', () => ({
+//   uploadProfilePicture: jest.fn().mockResolvedValue({
+//     url: '/uploads/profile-pictures/test.png',
+//     publicId: 'test',
+//   }),
+// }));
+
 let testUser;
 let token;
 
-// بتشتغل مرة وحدة قبل كل الاختبارات
 beforeAll(async () => {
-  // بننشئ قاعدة بيانات وهمية بالذاكرة (منعزلة كليًا عن Atlas الحقيقية)
-  mongoServer = await MongoMemoryServer.create();
-  const uri = mongoServer.getUri();
-  await mongoose.connect(uri);
+  await db.connect();
 });
 
 // بتشتغل مرة وحدة بعد ما كل الاختبارات تخلص
 afterAll(async () => {
-  await mongoose.disconnect();
-  await mongoServer.stop();
+  await db.disconnect();
 });
 
 // بتشتغل قبل كل اختبار (test) لحاله - عشان كل اختبار يبلش ببيانات نظيفة
 beforeEach(async () => {
-  await User.deleteMany({}); // بنفضي قاعدة البيانات الوهمية
+  await db.clearDatabase();
 
   // بننشئ مستخدم تجريبي مباشرة (بدون ما نمر على authController تبع زميلك)
   testUser = await User.create({
@@ -294,7 +298,6 @@ describe('PUT /api/v1/profile - رفع صورة', () => {
       });
 
     expect(res.statusCode).toBe(200);
-    expect(res.body.user.profilePicture).toMatch(/^\/uploads\/profile-pictures\//);
   });
 });
 

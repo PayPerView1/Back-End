@@ -6,7 +6,7 @@ require('dotenv').config();
 
 const request = require('supertest');
 const mongoose = require('mongoose');
-const { MongoMemoryServer } = require('mongodb-memory-server');
+// تم إزالة استيراد MongoMemoryServer
 
 const app = require('../app');
 const User = require('../models/user');
@@ -30,23 +30,34 @@ jest.mock('../services/emailService', () => ({
 
 jest.mock('../services/wallet/paypal.service');
 
-let mongoServer;
 let clipperUser, clipperToken;
 let otherClipper, otherClipperToken;
 let brandUser, brandToken;
 let activeCampaign;
 
+jest.setTimeout(40000);
+
 beforeAll(async () => {
-  mongoServer = await MongoMemoryServer.create();
-  await mongoose.connect(mongoServer.getUri());
+  // التأكد من وجود رابط قاعدة بيانات الاختبار
+  if (!process.env.MONGO_URI_TEST) {
+    throw new Error('MONGO_URI_TEST is not defined in .env file');
+  }
+  
+  // الاتصال بقاعدة بيانات الاختبار الحقيقية
+  await mongoose.connect(process.env.MONGO_URI_TEST);
 });
 
 afterAll(async () => {
+  // قطع الاتصال بقاعدة البيانات
   await mongoose.disconnect();
-  await mongoServer.stop();
+  
+  // اختياري: إذا أردت مسح قاعدة البيانات بالكامل بعد انتهاء جميع الاختبارات
+  // يمكنك إزالة التعليق عن السطر التالي:
+  // await mongoose.connection.dropDatabase();
 });
 
 beforeEach(async () => {
+  // تنظيف الجداول قبل كل اختبار
   await User.deleteMany({});
   await Campaign.deleteMany({});
   await Application.deleteMany({});
@@ -300,6 +311,8 @@ describe('GET /api/v1/applications/:id/materials', () => {
           fileSizeKb: 5000,
           mimeType: 'video/mp4',
           uploadedBy: brandUser._id,
+          publicId: 'demo-intro', 
+        resourceType: 'video',
         },
       ],
     });
@@ -317,8 +330,27 @@ describe('GET /api/v1/applications/:id/materials', () => {
       .set('Authorization', `Bearer ${clipperToken}`);
 
     expect(res.statusCode).toBe(200);
-    expect(res.body.data.length).toBe(1);
-    expect(res.body.data[0].downloadUrl).toBeDefined();
+
+    // Sprint 5 §3.1: الاستجابة كائن (summary + items) وليس مصفوفة، وبلا رابط تنزيل
+    const data = res.body.data;
+    expect(data.applicationId).toBe(String(appId));
+    expect(data.campaignId).toBe(String(campaignWithMaterial._id));
+    expect(data.summary).toEqual({ count: 1, totalSizeKb: 5000 });
+    expect(data.canDownloadAll).toBe(true);
+
+    expect(data.items).toHaveLength(1);
+    expect(data.items[0]).toMatchObject({
+      fileName: 'intro.mp4',
+      fileType: 'VIDEO',
+      mimeType: 'video/mp4',
+      fileSizeKb: 5000,
+    });
+    expect(data.items[0].previewUrl).toContain('w_480,q_auto:low,so_0,du_15');
+
+    // ⚠️ لا يُسرَّب رابط الأصل ولا الـ publicId — التنزيل عبر §3.2/§3.3 فقط
+    expect(data.items[0].downloadUrl).toBeUndefined();
+    expect(data.items[0].fileUrl).toBeUndefined();
+    expect(data.items[0].publicId).toBeUndefined();
   });
 
   it('❌ طلب PENDING: 403 FORBIDDEN', async () => {
@@ -332,7 +364,7 @@ describe('GET /api/v1/applications/:id/materials', () => {
       .set('Authorization', `Bearer ${clipperToken}`);
 
     expect(res.statusCode).toBe(403);
-    expect(res.body.code).toBe('FORBIDDEN');
+    expect(res.body.code).toBe('APPLICATION_NOT_ACCEPTED');
   });
 
   it('❌ طلب مبدع تاني: 404', async () => {

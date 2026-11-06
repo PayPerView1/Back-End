@@ -83,7 +83,11 @@ const withTimeout = (promise, ms) =>
 
 const fetchPostMetadata = async ({ platform, canonicalUrl, externalId }) => {
   const provider = providers[platform];
-  if (!provider) return emptyMeta(POST_FETCH_STATUS.UNAVAILABLE);
+  
+  // ✅ التعديل هنا: التحقق من وجود المزود ومن وجود دالة fetchPost بداخله
+  if (!provider || typeof provider.fetchPost !== 'function') {
+    return emptyMeta(POST_FETCH_STATUS.UNAVAILABLE);
+  }
 
   try {
     const data = await withTimeout(provider.fetchPost({ canonicalUrl, externalId }), getTimeoutMs());

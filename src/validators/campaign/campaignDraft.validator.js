@@ -230,9 +230,13 @@ const validateDraftSubmission = (req, res, next) => {
 
   const missingFields = getMissingCampaignFields(mergedData);
 
-  if (missingFields.length > 0) {
-    return res.status(400).json({ /* ... */ });
-  }
+if (missingFields.length > 0) {
+  return res.status(400).json({
+    success: false,
+    message: 'Draft is incomplete. Please fill in all required fields before submitting.',
+    missingFields,
+  });
+}
 
   // ⬇️ إضافة: تمرير بيانات الغلاف والـ materials بشكل صريح
   req.finalCampaignData = {

@@ -5,6 +5,7 @@
 //   node scripts/tryProvider.js "<رابط المنشور>"
 //   node scripts/tryProvider.js "<رابط>" --hashtags=تمويل_إسلامي,وافي_الاستثمار --mentions=WafiFinance
 //   node scripts/tryProvider.js "<رابط>" --platform=TIKTOK --min=30 --max=60
+//   node scripts/tryProvider.js "<رابط تيك توك>" --raw    (يطبع رد oEmbed الخام: الحالة والحقول)
 //
 // يمر بنفس المسار الذي تستعمله verifyPost: تحليل الرابط (وحل المختصر) ثم جلب البيانات ثم تقييم المتطلبات.
 // يقرأ YOUTUBE_API_KEY من .env. لا يطبع المفتاح.
@@ -32,6 +33,24 @@ if (!url) {
     const parsed = await resolveAndParse(url, opt('platform'));
     console.log('\n--- parsed ---');
     console.log(parsed);
+
+    // --raw: رد oEmbed الخام لتيك توك (لتشخيص NOT_FOUND/UNAVAILABLE). يوتيوب لا يدعمه لأن الرابط يحمل المفتاح.
+    if (args.includes('--raw') && parsed.platform === 'TIKTOK') {
+      const axios = require('axios');
+      const res = await axios.get('https://www.tiktok.com/oembed', {
+        params: { url: parsed.canonicalUrl },
+        timeout: 8000,
+        validateStatus: () => true,
+        headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0 (compatible; PayPerViewBot/1.0)' },
+      });
+      console.log('\n--- raw oEmbed ---');
+      console.log({
+        status: res.status,
+        contentType: res.headers['content-type'],
+        keys: res.data && typeof res.data === 'object' ? Object.keys(res.data) : typeof res.data,
+        body: JSON.stringify(res.data).slice(0, 400),
+      });
+    }
 
     const postMeta = await fetchPostMetadata(parsed);
     console.log('\n--- postMeta ---');

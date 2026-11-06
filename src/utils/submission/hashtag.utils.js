@@ -61,7 +61,12 @@ const extractHashtags = (text) => {
 const extractMentions = (text) => {
   const found = [];
   for (const match of String(text || '').matchAll(MENTION_REGEX)) {
-    found.push(`@${match[1]}`);
+    const username = match[1];
+    
+    // 🛡️ فلترة: تجاهل إذا كان "المنشن" هو في الحقيقة بداية رابط (http, https, www)
+    if (/^(https?|www)$/i.test(username)) continue;
+    
+    found.push(`@${username}`);
   }
   return uniqueBy(found, mentionKey);
 };

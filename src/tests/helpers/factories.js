@@ -66,14 +66,17 @@ const createAcceptedApplication = (creator, campaign, overrides = {}) =>
 /** تسليم جاهز (يجتاز pre-validate: dedupKey و linkLocked يُحسبان تلقائياً) */
 const createSubmission = async ({ creator, campaign, application }, overrides = {}) => {
   const n = next();
+  
+  const safeId = 1000000000000 + n; 
+  
   return Submission.create({
     campaignId: campaign._id,
     creatorId: creator._id,
     applicationId: application._id,
     platform: 'TIKTOK',
-    postUrl: `https://www.tiktok.com/@user/video/${7000000000000000000 + n}`,
-    canonicalUrl: `https://www.tiktok.com/@user/video/${7000000000000000000 + n}`,
-    externalId: String(7000000000000000000 + n),
+    postUrl: `https://www.tiktok.com/@user/video/${safeId}`,
+    canonicalUrl: `https://www.tiktok.com/@user/video/${safeId}`,
+    externalId: String(safeId),
     halalPledge: { accepted: true },
     status: SUBMISSION_STATUS.SUBMITTED,
     ...overrides,

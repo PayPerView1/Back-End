@@ -13,19 +13,31 @@ const startDraftExpiryJob = require('./src/jobs/draftExpiry.job');
 const { startBudgetMonitor } = require('./src/jobs/budgetMonitor.job');
 const { startDailyBudgetReset } = require('./src/jobs/dailyBudgetReset.job');
 const { startDormantWalletJob } = require('./src/jobs/dormantWallet.job');
-
-// الاتصال بقاعدة البيانات
-connectDB();
-
+const { startSubmissionAutoApprove } = require('./src/jobs/submissionAutoApprove.job');
+const { startSubmissionProcessor } = require('./src/jobs/submissionProcessor.job');
+// الاتصال بقاعدة البيانات قبل بدء الاستماع (الـ jobs تحتاج اتصالاً جاهزًا)
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+const startServer = async () => {
+  try {
+    await connectDB();
+  } catch (error) {
+    console.error('FATAL ERROR: Failed to connect to MongoDB.');
+    process.exit(1);
+  }
 
-  // تشغيل الـ cron jobs بعد ما السيرفر يبلش يشتغل فعليًا
-  startCampaignExpiryJob();
-  startDraftExpiryJob();
-  startBudgetMonitor();
-  startDailyBudgetReset();
-  startDormantWalletJob();
-});
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+
+    // تشغيل الـ cron jobs بعد ما السيرفر يبلش يشتغل فعليًا
+    startCampaignExpiryJob();
+    startDraftExpiryJob();
+    startBudgetMonitor();
+    startDailyBudgetReset();
+    startDormantWalletJob();
+    startSubmissionAutoApprove();
+    startSubmissionProcessor();
+  });
+};
+
+startServer();

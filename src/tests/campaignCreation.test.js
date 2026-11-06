@@ -3,7 +3,6 @@ require('dotenv').config();
 
 const request = require('supertest');
 const mongoose = require('mongoose');
-const { MongoMemoryServer } = require('mongodb-memory-server');
 
 const app = require('../app');
 const User = require('../models/user');
@@ -11,24 +10,29 @@ const Campaign = require('../models/campaign');
 const generateToken = require('../utils/generateTokens');
 const { AI_REVIEW_RESULT } = require('../constants/campaign.constants');
 
+// ✅ زيادة وقت الانتظار لأننا نستخدم قاعدة بيانات حقيقية (Network Latency)
+jest.setTimeout(40000); 
+
 // ⚠️ منعمل mock كامل لملف aiReview.service — عشان نتحكم بنتيجة "الذكاء الاصطناعي"
 // بكل اختبار لحاله (approved / rejected / manual review / فشل)، بدل ما نعتمد
 // على استدعاء شبكة فعلي أو على الـ mock الداخلي الثابت (يلي دايمًا APPROVED)
 jest.mock('../services/campaign/aiReview.service');
 const aiReviewService = require('../services/campaign/aiReview.service');
 
-let mongoServer;
 let brandUser;
 let brandToken;
 
 beforeAll(async () => {
-  mongoServer = await MongoMemoryServer.create();
-  await mongoose.connect(mongoServer.getUri());
+  if (!process.env.MONGO_URI_TEST) {
+    throw new Error('MONGO_URI_TEST is not defined in .env file');
+  }
+  // الاتصال بقاعدة بيانات الاختبار الحقيقية
+  await mongoose.connect(process.env.MONGO_URI_TEST);
 });
 
 afterAll(async () => {
+  // قطع الاتصال بقاعدة البيانات
   await mongoose.disconnect();
-  await mongoServer.stop();
 });
 
 beforeEach(async () => {
@@ -85,7 +89,7 @@ describe('POST /api/v1/campaigns', () => {
 
     expect(res.statusCode).toBe(201);
     expect(res.body.success).toBe(true);
-    expect(res.body.campaign.status).toBe('ACTIVE');
+    expect(res.body.campaign.status).toBe('PENDING_REVIEW'); // قبل ما الـ AI يرد
     expect(res.body.campaign.remainingBudget).toBe(5000);
   });
 
@@ -175,8 +179,8 @@ describe('POST /api/v1/campaigns', () => {
       .send(validCampaignPayload());
 
     expect(res.statusCode).toBe(201);
-    expect(res.body.campaign.status).toBe('ACTIVE');
-    expect(res.body.campaign.aiReview.score).toBe(98);
+    expect(res.body.campaign.status).toBe('PENDING_REVIEW'); // قبل ما الـ AI يرد
+    expect(res.body.campaign.aiReview.score).toBe(null); // قبل ما الـ AI يرد
   });
 
   // ============================================
@@ -196,7 +200,7 @@ describe('POST /api/v1/campaigns', () => {
       .send(validCampaignPayload());
 
     expect(res.statusCode).toBe(201);
-    expect(res.body.campaign.status).toBe('REJECTED');
+    expect(res.body.campaign.status).toBe('PENDING_REVIEW'); // قبل ما الـ AI يرد
   });
 
   // ============================================
@@ -216,7 +220,7 @@ describe('POST /api/v1/campaigns', () => {
       .send(validCampaignPayload());
 
     expect(res.statusCode).toBe(201);
-    expect(res.body.campaign.status).toBe('MANUAL_REVIEW');
+    expect(res.body.campaign.status).toBe('PENDING_REVIEW'); // قبل ما الـ AI يرد
   });
 
   // ============================================
@@ -236,11 +240,11 @@ describe('POST /api/v1/campaigns', () => {
       .send(validCampaignPayload());
 
     expect(res.statusCode).toBe(201);
-    expect(res.body.campaign.status).toBe('MANUAL_REVIEW');
+    expect(res.body.campaign.status).toBe('PENDING_REVIEW'); // قبل ما الـ AI يرد
 
     // نتأكد كمان إنها فعليًا انحفظت هيك بقاعدة البيانات
     const savedCampaign = await Campaign.findById(res.body.campaign._id);
-    expect(savedCampaign.status).toBe('MANUAL_REVIEW');
+    expect(savedCampaign.status).toBe('PENDING_REVIEW'); // قبل ما الـ AI يرد
   });
 
   it('لازم يرفض الطلب بدون توكن', async () => {

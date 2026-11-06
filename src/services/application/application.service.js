@@ -1,3 +1,4 @@
+// src/services/application.service.js
 const mongoose = require('mongoose');
 const Application = require('../../models/application');
 const Campaign = require('../../models/campaign');
@@ -14,8 +15,9 @@ const {
   getAvailability,
 } = require('../../utils/campaign/campaignVisibility.utils');
 const { parsePagination, buildPageMeta } = require('../../utils/paginate.utils');
-const { getAcceptedApplication } = require('../../utils/submission/submissionGuards.utils');
+const { getAcceptedApplication, assertCampaignAllowsDownloads } = require('../../utils/submission/submissionGuards.utils');
 const { CAMPAIGN_STATUS } = require('../../constants/campaign.constants');
+const { toPreviewMaterial } = require('../../utils/campaign/materialPreview.utils');
 // ============================================
 // 1. Apply to a Campaign
 // ============================================
@@ -262,37 +264,37 @@ const getMyApplications = async (creatorId, filters = {}) => {
 };
 
 // ============================================
-// 4. Accepted Materials (Download)
+// 4. Accepted Materials (القائمة فقط، التنزيل عبر روابط موقّعة: services/material)
 // ============================================
-// ⚠️ A5.0: شرط ACCEPTED كان معلّقاً. الآن:
-//   - طلب مبدع آخر أو غير موجود  => 404 NOT_FOUND (لا نكشف وجوده)
-//   - طلب غير مقبول              => 403 APPLICATION_NOT_ACCEPTED
-//   - حملة ملغاة/موقوفة/مؤرشفة   => 409 CAMPAIGN_UNAVAILABLE
-// (الشكل الحالي للاستجابة، ومنه downloadUrl، لم يتغير بعد. يتغير في A5.2.)
+// ⚠️ لا تُرجع هذه الدالة أي رابط تنزيل أو fileUrl أو publicId.
+//   - طلب مبدع آخر أو غير موجود => NOT_FOUND
+//   - طلب غير مقبول              => APPLICATION_NOT_ACCEPTED
+//   - حملة ملغاة/موقوفة/مؤرشفة   => CAMPAIGN_UNAVAILABLE
 const getAcceptedMaterials = async (applicationId, creatorId) => {
   const application = await getAcceptedApplication(creatorId, { applicationId });
 
-  const campaign = await Campaign.findById(application.campaignId).lean();
+  const campaign = await Campaign.findById(application.campaignId)
+    .select('materials isSuspended isArchived status')
+    .lean();
   if (!campaign) {
     throw new AppError('Campaign not found', 'NOT_FOUND');
   }
+  assertCampaignAllowsDownloads(campaign);
 
-  if (
-    campaign.isSuspended === true ||
-    campaign.isArchived === true ||
-    campaign.status === CAMPAIGN_STATUS.CANCELLED
-  ) {
-    throw new AppError('This campaign is currently unavailable.', 'CAMPAIGN_UNAVAILABLE');
-  }
+  // نختار المفاتيح صراحةً: لو أُضيف حقل داخلي لاحقاً في toPreviewMaterial فلا يتسرب
+  const items = (campaign.materials || []).map((material) => {
+    const { id, fileName, fileType, mimeType, fileSizeKb, previewUrl } = toPreviewMaterial(material);
+    return { id, fileName, fileType, mimeType, fileSizeKb, previewUrl };
+  });
+  const totalSizeKb = items.reduce((sum, item) => sum + (item.fileSizeKb || 0), 0);
 
-  return (campaign.materials || []).map((m) => ({
-    id: m._id,
-    fileName: m.fileName,
-    fileType: m.fileType,
-    mimeType: m.mimeType,
-    fileSizeKb: m.fileSizeKb,
-    downloadUrl: m.fileUrl,
-  }));
+  return {
+    applicationId: application._id,
+    campaignId: campaign._id,
+    summary: { count: items.length, totalSizeKb },
+    canDownloadAll: items.length > 0,
+    items,
+  };
 };
 
 /**
