@@ -12,6 +12,39 @@ const CreatorPreferences = require('../../models/creatorPreferences');
 const { computeMatchScore } = require('../../utils/campaign/matchScore.utils');
 const { buildVisibleCampaignFilter, getAvailability } = require('../../utils/campaign/campaignVisibility.utils');
 const { APPLICATION_STATUS } = require('../../constants/discovery.constants');
+const aiIntelligence = require('../ai/aiIntelligence.client');
+const aiServiceConfig = require('../ai/aiServiceConfig');
+
+const collectCollaborativeSignals = async (creatorId, appliedApps, candidateIds) => {
+  const ownFavorites = await Favorite.find({ creatorId }).select('campaignId').lean();
+  const interactedCampaignIds = [...new Set([
+    ...appliedApps.map((item) => item.campaignId?.toString()).filter(Boolean),
+    ...ownFavorites.map((item) => item.campaignId?.toString()).filter(Boolean),
+  ])];
+  if (!interactedCampaignIds.length || !candidateIds.length) return { signals: {}, peerCount: 0 };
+
+  const peerFilters = { campaignId: { $in: interactedCampaignIds }, creatorId: { $ne: creatorId } };
+  const [peerApplications, peerFavorites] = await Promise.all([
+    Application.find({ ...peerFilters, status: { $in: [APPLICATION_STATUS.PENDING, APPLICATION_STATUS.ACCEPTED] } })
+      .select('creatorId').limit(5000).lean(),
+    Favorite.find(peerFilters).select('creatorId').limit(5000).lean(),
+  ]);
+  const peerIds = [...new Set([...peerApplications, ...peerFavorites].map((item) => item.creatorId?.toString()).filter(Boolean))].slice(0, 500);
+  if (!peerIds.length) return { signals: {}, peerCount: 0 };
+
+  const candidateFilters = { creatorId: { $in: peerIds }, campaignId: { $in: candidateIds } };
+  const [candidateApplications, candidateFavorites] = await Promise.all([
+    Application.find({ ...candidateFilters, status: { $in: [APPLICATION_STATUS.PENDING, APPLICATION_STATUS.ACCEPTED] } })
+      .select('campaignId').limit(10000).lean(),
+    Favorite.find(candidateFilters).select('campaignId').limit(10000).lean(),
+  ]);
+  const signals = {};
+  [...candidateApplications, ...candidateFavorites].forEach((item) => {
+    const id = item.campaignId?.toString();
+    if (id) signals[id] = (signals[id] || 0) + 1;
+  });
+  return { signals, peerCount: peerIds.length };
+};
 
 // ============================================
 // Helpers
@@ -94,13 +127,50 @@ const getRecommendations = async (creatorId, limit = 10) => {
     };
   }
 
-  // 5. حساب matchScore لكل حملة
+  const candidateIds = candidates.map((campaign) => campaign._id);
+  const collaborative = await collectCollaborativeSignals(creatorId, appliedApps, candidateIds);
+  let semanticScores = {};
+  const embeddingConfigured = aiServiceConfig.isConfigured();
+  if (embeddingConfigured) {
+    const profileTypes = [...new Set([...(preferences?.preferredContentTypes || []), ...previousContentTypes])];
+    const profileTextAvailable = profileTypes.length > 0 || (preferences?.preferredCountries || []).length > 0;
+    if (profileTextAvailable) {
+      try {
+        const ranking = await aiIntelligence.rankRecommendations({
+          creatorProfile: {
+            preferredContentTypes: profileTypes,
+            preferredCountries: preferences?.preferredCountries || [],
+          },
+          campaigns: candidates.map((campaign) => ({
+            id: campaign._id.toString(),
+            content: [campaign.name, campaign.contentType, campaign.category, ...(campaign.subCategories || [])]
+              .filter((part) => typeof part === 'string' && part.trim()).join(' ').slice(0, 8000),
+            contentType: campaign.contentType,
+            targetCountries: campaign.targetCountries || [],
+          })),
+          collaborativeSignals: collaborative.signals,
+        });
+        semanticScores = Object.fromEntries(ranking.data.map((item) => [item.campaignId, item.score]));
+      } catch (error) {
+        console.warn('[campaignRecommendation] AI embedding ranking unavailable; using database signals:', error.code || 'UNKNOWN');
+      }
+    }
+  }
+
+  // 5. Score from creator preferences, live peer interactions and optional fresh embeddings.
   const scored = candidates.map((c) => {
     const { score, reasons } = computeMatchScore(c, {
       preferences,
       previousContentTypes,
     });
-    return { campaign: c, score, reasons };
+    const peerSignalCount = collaborative.signals[c._id.toString()] || 0;
+    if (peerSignalCount > 0) reasons.push({ code: 'SIMILAR_CREATORS_INTERACTED', value: peerSignalCount });
+    const semanticScore = semanticScores[c._id.toString()] || 0;
+    if (semanticScore >= 0.4) reasons.push({ code: 'CONTENT_SIMILARITY', value: semanticScore });
+    const collaborativeScore = peerSignalCount && collaborative.peerCount
+      ? Math.min(1, Math.log1p(peerSignalCount) / Math.log1p(collaborative.peerCount))
+      : 0;
+    return { campaign: c, score: score + collaborativeScore + (semanticScore * 2), reasons };
   });
 
   // 6. ترتيب تنازلياً (score ثم createdAt)

@@ -36,13 +36,21 @@ const emptyMeta = (fetchStatus) => ({
 
 const normalizeStats = (stats) => {
   if (!stats || typeof stats !== 'object') return null;
+  const countryViews = Array.isArray(stats.countryViews)
+    ? stats.countryViews
+        .filter((item) => /^[A-Z]{3}$/.test(String(item?.countryCode || '').toUpperCase()) && Number.isFinite(Number(item.views)) && Number(item.views) >= 0)
+        .map((item) => ({ countryCode: String(item.countryCode).toUpperCase(), views: Number(item.views) }))
+    : [];
   const result = {
     views: num(stats.views),
     likes: num(stats.likes),
     comments: num(stats.comments),
     shares: num(stats.shares),
+    countryViews,
   };
-  return Object.values(result).every((v) => v === null) ? null : result;
+  return Object.entries(result).every(([key, value]) => key === 'countryViews' ? value.length === 0 : value === null)
+    ? null
+    : result;
 };
 
 const normalizeMeta = (data) => {

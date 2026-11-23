@@ -21,35 +21,50 @@ exports.protect = async (req, res, next) => {
     });
   }
 
+  if (!process.env.JWT_SECRET) {
+    return res.status(500).json({
+      success: false,
+      message: 'Authentication service is unavailable.',
+    });
+  }
+
+  let decoded;
   try {
-    if (!process.env.JWT_SECRET) {
-      return res.status(500).json({
-        success: false,
-        message: 'Server configuration error: JWT_SECRET is missing.',
-      });
-    }
-
-    // 2. فك تشفير التوكن والتحقق من صحته
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    // 3. التأكد من أن المستخدم صاحب التوكن لا يزال موجوداً في قاعدة البيانات
-    req.user = await User.findById(decoded.id);
-
-    if (!req.user) {
-      return res.status(401).json({
-        success: false,
-        message: 'The user belonging to this token no longer exists.',
-      });
-    }
-
-    // الانتقال إلى الـ Controller التالي
-    next();
+    decoded = jwt.verify(token, process.env.JWT_SECRET);
   } catch (error) {
     return res.status(401).json({
       success: false,
       message: 'Not authorized, token failed or expired.',
     });
   }
+
+  let user;
+  try {
+    user = await User.findById(decoded.id).select('+tokenVersion');
+  } catch (error) {
+    console.error('[AUTH] user lookup failed:', error.name || 'DatabaseError');
+    return res.status(500).json({
+      success: false,
+      message: 'Authentication service is temporarily unavailable.',
+    });
+  }
+
+  if (!user) {
+    return res.status(401).json({
+      success: false,
+      message: 'The user belonging to this token no longer exists.',
+    });
+  }
+
+  if ((decoded.ver || 0) !== (user.tokenVersion || 0)) {
+    return res.status(401).json({
+      success: false,
+      message: 'Not authorized, token failed or expired.',
+    });
+  }
+
+  req.user = user;
+  return next();
 };
 
 // يضع req.user إن وُجد توكن صالح، وإلا يكمل كزائر بدون رفض الطلب
@@ -59,8 +74,8 @@ exports.optionalAuth = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(header.split(' ')[1], process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id);
-    if (user) req.user = user;
+    const user = await User.findById(decoded.id).select('+tokenVersion');
+    if (user && (decoded.ver || 0) === (user.tokenVersion || 0)) req.user = user;
   } catch (error) {
     // توكن منتهٍ أو غير صالح → يُعامل كزائر
   }
