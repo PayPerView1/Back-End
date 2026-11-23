@@ -81,6 +81,9 @@ const buildSteps = (submission, displayStatus) => {
           ? { state: 'FAILED', outcome: 'FAILED' }
           : { state: 'DONE', outcome: 'PASSED' };
       break;
+    case DISPLAY_STATUS.CHANGES_REQUESTED:
+      ai = { state: 'DONE', outcome: 'PASSED' };
+      break;
     case DISPLAY_STATUS.WITHDRAWN:
       ai = { state: 'PENDING', outcome: null };
       break;
@@ -90,7 +93,7 @@ const buildSteps = (submission, displayStatus) => {
 
   let reward = 'PENDING';
   if (displayStatus === DISPLAY_STATUS.APPROVED) reward = 'ACTIVE';
-  if ([DISPLAY_STATUS.AI_REJECTED, DISPLAY_STATUS.REJECTED].includes(displayStatus)) reward = 'FAILED';
+  if ([DISPLAY_STATUS.AI_REJECTED, DISPLAY_STATUS.REJECTED, DISPLAY_STATUS.CHANGES_REQUESTED].includes(displayStatus)) reward = 'FAILED';
 
   return [
     { key: 'SUBMITTED', state: 'DONE' },
@@ -114,7 +117,7 @@ const toDetail = (submission, ctx = {}) => {
   }));
 
   const count = (status) => checks.filter((c) => c.status === status).length;
-  const rejected = [DISPLAY_STATUS.REJECTED, DISPLAY_STATUS.AI_REJECTED].includes(displayStatus);
+  const rejected = [DISPLAY_STATUS.REJECTED, DISPLAY_STATUS.AI_REJECTED, DISPLAY_STATUS.CHANGES_REQUESTED].includes(displayStatus);
   const adv = submission.advertiserReview || {};
   const adm = submission.adminReview || {};
 

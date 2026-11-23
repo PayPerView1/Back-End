@@ -6,6 +6,7 @@ const mongoose = require('mongoose');
 const Submission = require('../../models/submission');
 const Campaign = require('../../models/campaign');
 const Application = require('../../models/application');
+const User = require('../../models/user');
 const { AppError } = require('../../utils/errors');
 const { parsePagination, buildPageMeta } = require('../../utils/paginate.utils');
 const {
@@ -179,35 +180,50 @@ const createSubmission = async (creatorId, campaignId, body) => {
   };
 
   let created;
+  const session = await mongoose.startSession();
   try {
-    // ⚠️ الفهرس الفريد على dedupKey يمنع السباق
-    created = await Submission.create(submissionPayload);
+    await session.withTransaction(async () => {
+      // تحديث مستند المبدع داخل المعاملة يجعل فحص العدد وإنشاء التسليم
+      // متسلسلين للمبدع نفسه حتى عند وصول الطلبات في الوقت ذاته.
+      const creatorLock = await User.updateOne(
+        { _id: creatorId },
+        { $inc: { submissionLimitSequence: 1 } },
+        { session }
+      );
+
+      if (!creatorLock.matchedCount) {
+        throw new AppError('Creator not found', 'NOT_FOUND');
+      }
+
+      const activeCount = await Submission.countDocuments({
+        creatorId,
+        campaignId: campaign._id,
+        status: { $in: LINK_HOLDING_STATUSES },
+      }).session(session);
+      const limit =
+        campaign.maxSubmissionsPerCreator ??
+        SUBMISSION_CONFIG.MAX_ACTIVE_PER_CREATOR_PER_CAMPAIGN ??
+        5;
+
+      if (activeCount >= limit) {
+        throw new AppError(
+          'You reached the maximum number of active submissions for this campaign.',
+          'SUBMISSION_LIMIT_REACHED'
+        );
+      }
+
+      // يظل الفهرس الفريد على dedupKey حاجزاً نهائياً أمام رابط مكرر.
+      created = new Submission(submissionPayload);
+      await created.save({ session });
+    });
   } catch (err) {
     if (err && err.code === 11000) {
       // سباق: نفس الرابط تسلّم في نفس اللحظة
       throw new AppError('This link has already been submitted', 'LINK_ALREADY_SUBMITTED');
     }
     throw err;
-  }
-
-  // 6. سباق حد التسليمات — نعيد العدّ
-  const activeCount = await Submission.countDocuments({
-    creatorId,
-    campaignId: campaign._id,
-    status: { $in: LINK_HOLDING_STATUSES },
-  });
-  const limit =
-    campaign.maxSubmissionsPerCreator ||
-    SUBMISSION_CONFIG.MAX_ACTIVE_PER_CREATOR_PER_CAMPAIGN ||
-    5;
-
-  if (activeCount > limit) {
-    // حذف المستند الذي تجاوز الحد
-    await Submission.deleteOne({ _id: created._id });
-    throw new AppError(
-      'You reached the maximum number of active submissions for this campaign.',
-      'SUBMISSION_LIMIT_REACHED'
-    );
+  } finally {
+    await session.endSession();
   }
 
   // 7. حذف المسودة (T2)
@@ -535,7 +551,7 @@ const resubmitSubmission = async (submissionId, creatorId, body = {}) => {
   }
 
   const displayStatus = getDisplayStatus(original);
-  if (![DISPLAY_STATUS.AI_REJECTED, DISPLAY_STATUS.REJECTED].includes(displayStatus)) {
+  if (![DISPLAY_STATUS.AI_REJECTED, DISPLAY_STATUS.REJECTED, DISPLAY_STATUS.CHANGES_REQUESTED].includes(displayStatus)) {
     throw new AppError('Submission is not in a rejected state', 'SUBMISSION_NOT_EDITABLE');
   }
 
