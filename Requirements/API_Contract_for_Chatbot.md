@@ -67,10 +67,10 @@ Content-Type: application/json
 
 `title` is optional.
 
-If it is not provided, the backend uses:
+If it is not provided or is an empty string, the backend uses:
 
 ```text
-New conversation```
+New thread```
 
 ### Response — 201 Created
 
@@ -101,7 +101,8 @@ New conversation```
 ```json
 {
   "success": false,
-  "message": "failed to create thread, please try again"
+  "message": "Server error",
+  "code": "INTERNAL_ERROR"
 }
 ```
 
@@ -134,7 +135,7 @@ The backend returns only conversations belonging to the authenticated user.
     },
     {
       "id": "67xxxxxxxxxxxxxxxxxxxxxx",
-      "title": "New Conversation",
+      "title": "New thread",
       "updatedAt": "2026-09-11T15:20:00.000Z",
       "lastMessage": "بداية محادثة جديدة"
     }
@@ -169,7 +170,8 @@ Threads are returned with the most recently updated first.
 ```json
 {
   "success": false,
-  "message": "failed to list threads, please try again"
+  "message": "Server error",
+  "code": "INTERNAL_ERROR"
 }
 ```
 
@@ -197,16 +199,18 @@ Authorization: Bearer <JWT_TOKEN>
   "success": true,
   "data": [
     {
-      "_id": "70xxxxxxxxxxxxxxxxxxxxxx",
+      "id": "70xxxxxxxxxxxxxxxxxxxxxx",
       "role": "user",
       "content": "How can I create a campaign?",
-      "created_at": "2026-09-12T12:00:00.000Z"
+      "createdAt": "2026-09-12T12:00:00.000Z",
+      "feedback": null
     },
     {
-      "_id": "71xxxxxxxxxxxxxxxxxxxxxx",
+      "id": "71xxxxxxxxxxxxxxxxxxxxxx",
       "role": "assistant",
       "content": "You can create a campaign by...",
-      "created_at": "2026-09-12T12:00:03.000Z"
+      "createdAt": "2026-09-12T12:00:03.000Z",
+      "feedback": null
     }
   ]
 }
@@ -216,19 +220,21 @@ Authorization: Bearer <JWT_TOKEN>
 
 | Field | Type | Description |
 |---|---|---|
-| `_id` | string | MongoDB message ID |
+| `id` | string | MongoDB message ID |
 | `role` | string | `user` or `assistant` |
 | `content` | string | Message text |
-| `created_at` | string | Message creation timestamp |
+| `createdAt` | string | Message creation timestamp |
+| `feedback` | object or null | The user's saved feedback for an assistant message. |
 
 Messages are returned from oldest to newest.
 
-### Unauthorized Thread — 403
+### Unknown or Unowned Thread — 404
 
 ```json
 {
   "success": false,
-  "message": "you are not authorized to access this thread"
+  "message": "Conversation not found",
+  "code": "NOT_FOUND"
 }
 ```
 
@@ -237,7 +243,8 @@ Messages are returned from oldest to newest.
 ```json
 {
   "success": false,
-  "message": "failed to get messages, please try again"
+  "message": "Server error",
+  "code": "INTERNAL_ERROR"
 }
 ```
 
@@ -270,6 +277,7 @@ Content-Type: application/json
 ```
 
 `content` is required and cannot be empty or whitespace-only.
+The backend accepts at most 4,000 characters, matching the AI service request schema.
 
 ### Response — 200 OK
 
@@ -306,23 +314,27 @@ Content-Type: application/json
 }
 ```
 
-### Unauthorized Thread — 403
+### Unknown or Unowned Thread — 404
 
 ```json
 {
   "success": false,
-  "message": "you are not authorized to send messages in this thread"
+  "message": "Conversation not found",
+  "code": "NOT_FOUND"
 }
 ```
 
-### Server / AI Service Error — 500
+### AI Service Errors — 502 or 503
 
 ```json
 {
   "success": false,
-  "message": "failed to send message, please try again"
+  "message": "The AI assistant is temporarily unavailable",
+  "code": "AI_SERVICE_UNAVAILABLE"
 }
 ```
+
+An invalid or unsuccessful upstream response uses HTTP `502` and code `AI_SERVICE_BAD_RESPONSE`. Database or other backend failures use HTTP `500` with code `INTERNAL_ERROR` and the generic message `Server error`.
 
 ---
 
@@ -349,23 +361,27 @@ The backend:
 }
 ```
 
-### Unauthorized Thread — 403
+### Unknown or Unowned Thread — 404
 
 ```json
 {
   "success": false,
-  "message": "you are not authorized to delete this thread"
+  "message": "Conversation not found",
+  "code": "NOT_FOUND"
 }
 ```
 
-### Error — 500
+### AI Service Error — 502 or 503
 
 ```json
 {
   "success": false,
-  "message": "failed to delete the thread. Please try again."
+  "message": "The AI assistant is temporarily unavailable",
+  "code": "AI_SERVICE_UNAVAILABLE"
 }
 ```
+
+Local database failures during deletion return HTTP `500` with code `INTERNAL_ERROR`.
 
 ---
 
@@ -542,6 +558,9 @@ GET    /api/v1/chat/threads/:threadId/messages
 POST   /api/v1/chat/threads/:threadId/messages
        Send message + receive AI response
 
+PATCH  /api/v1/chat/threads/:threadId/messages/:messageId/feedback
+       Submit feedback for an assistant message
+
 DELETE /api/v1/chat/threads/:threadId
        Delete chat
 ```
@@ -556,6 +575,30 @@ Based directly on the supplied backend implementation:
 2. Thread listing has no pagination parameters.
 3. Message listing has no pagination parameters.
 4. The send-message endpoint is not streaming; it waits for the AI service response and returns the completed assistant message.
-5. Several chatbot-specific error messages are currently in Arabic.
+5. Message content is limited to 4,000 characters to match the AI-service request schema.
 6. Rate limiting is 30 requests per minute.
 7. The frontend should use the local MongoDB `threadId` for chatbot endpoints.
+8. A thread the caller does not own returns `404 NOT_FOUND` so its existence is not disclosed.
+
+---
+
+# 13. Assistant Message Feedback
+
+```http
+PATCH /api/v1/chat/threads/:threadId/messages/:messageId/feedback
+Authorization: Bearer <JWT_TOKEN>
+Content-Type: application/json
+```
+
+Request:
+
+```json
+{
+  "rating": "HELPFUL",
+  "comment": "Optional comment, up to 1,000 characters"
+}
+```
+
+`rating` is required and must be `HELPFUL` or `NOT_HELPFUL`. The thread must belong to the authenticated user and the message must be an assistant message.
+
+Success returns `{ "success": true, "data": { "messageId": "...", "feedback": { "rating": "HELPFUL", "comment": "", "submittedAt": "..." } } }`. An inaccessible thread or missing/non-assistant message returns `404 NOT_FOUND`.
