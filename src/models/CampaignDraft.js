@@ -22,6 +22,15 @@ const draftMaterialSchema = new mongoose.Schema(
   { _id: true, timestamps: { createdAt: 'uploadedAt', updatedAt: false } }
 );
 
+const halalDeclarationSchema = new mongoose.Schema({
+  noGambling: { type: Boolean },
+  noSexualContent: { type: Boolean },
+  noExplicitMusic: { type: Boolean },
+  noAlcohol: { type: Boolean },
+  noSuspiciousCurrencies: { type: Boolean },
+  noUnrealisticProfit: { type: Boolean },
+}, { _id: false });
+
 // ----------------------
 // Schema المسودة
 // ----------------------
@@ -73,6 +82,7 @@ const campaignDraftSchema = new mongoose.Schema(
     targetCountries: { type: [String], default: [] },
 
     halalDeclared: { type: Boolean, default: false },
+    halalDeclaration: { type: halalDeclarationSchema, default: null },
     copyInfo: {
       isCopy: { 
         type: Boolean, 

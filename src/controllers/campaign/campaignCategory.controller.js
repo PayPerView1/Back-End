@@ -12,14 +12,14 @@ const getCategories = async (req, res) => {
     const categories = campaignCategoryService.getAllCategories();
 
     return res.status(200).json({
-      success: 'true',
+      success: true,
       data: {
         categories,
       },
     });
   } catch (error) {
     return res.status(error.statusCode || 500).json({
-      success: 'false',
+      success: false,
       message: error.message || 'Internal server error',
     });
   }
@@ -35,14 +35,14 @@ const getSubCategories = async (req, res) => {
     const subCategories = campaignCategoryService.getSubCategories();
 
     return res.status(200).json({
-      success: 'false',
+      success: true,
       data: {
         subCategories,
       },
     });
   } catch (error) {
     return res.status(error.statusCode || 500).json({
-      success: 'false',
+      success: false,
       message: error.message || 'Internal server error',
     });
   }

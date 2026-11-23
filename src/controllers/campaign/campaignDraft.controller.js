@@ -1,6 +1,10 @@
 // src/controllers/campaign/campaignDraft.controller.js
 const draftService = require('../../services/campaign/campaignDraft.service');
-const { uploadCoverImage, uploadFilesToStorage } = require('../../services/campaign/fileUpload.service');
+const {
+  uploadCoverImage,
+  uploadFilesToStorage,
+  deleteFilesFromStorage,
+} = require('../../services/campaign/fileUpload.service');
 // ============================================
 // 6.2.1 — POST /api/v1/campaigns/drafts
 // ============================================
@@ -102,8 +106,9 @@ const updateDraft = async (req, res) => {
       updateData.coverImagePublicId = coverImageData.publicId;
     }
     if (uploadedMaterials.length > 0) {
-      // ملاحظة: هذا سيستبدل المصفوفة القديمة بالكامل. إذا أردت الإضافة فقط، يجب تعديل الـ Service.
       updateData.materials = uploadedMaterials; 
+    } else if (!Array.isArray(updateData.materials) || updateData.materials.length === 0) {
+      delete updateData.materials;
     }
 
     const updatedDraft = await draftService.updateDraft(req.draft, updateData);
@@ -114,10 +119,22 @@ const updateDraft = async (req, res) => {
       draft: updatedDraft,
     });
   } catch (error) {
-    const statusCode = error.statusCode || 500;
+    console.error('[campaignDraft.controller] updateDraft error:', error);
+    let statusCode = error.statusCode || 500;
+    let message = error.statusCode ? error.message : 'Server error while updating draft';
+
+    if (error.name === 'ValidationError') {
+      statusCode = 400;
+      message = error.message;
+    } else if (error.name === 'CastError') {
+      statusCode = 400;
+      message = `Invalid value for field ${error.path}`;
+    }
+
     res.status(statusCode).json({
       success: false,
-      message: error.statusCode ? error.message : 'Server error while updating draft',
+      message,
+      error: error.message,
     });
   }
 };
@@ -143,6 +160,8 @@ const deleteDraft = async (req, res) => {
 // 6.2.5 — PATCH /api/v1/campaigns/drafts/:draftId/auto-save
 // ============================================
 const autoSaveDraft = async (req, res) => {
+  let newCover = null;
+  let newMaterials = [];
   try {
     // clientVersion المفروض توصل بالـ body (مصدرها الفرونت إند، النسخة يلي كانت عندو وقت بلش يعدل)
     const { clientVersion, ...updateData } = req.body;
@@ -154,7 +173,29 @@ const autoSaveDraft = async (req, res) => {
       });
     }
 
+    const coverImageFile = req.files?.coverImage?.[0] || null;
+    const materials = req.files?.materials || [];
+    const advertiserId = req.draft.advertiserId;
+    if (coverImageFile) {
+      newCover = await uploadCoverImage(coverImageFile);
+      updateData.coverImage = newCover.url;
+      updateData.coverImagePublicId = newCover.publicId;
+    }
+    if (materials.length > 0) {
+      newMaterials = await uploadFilesToStorage(materials);
+      updateData.materials = [
+        ...(req.draft.materials || []).map((item) => item.toObject ? item.toObject() : item),
+        ...newMaterials.map((item) => ({ ...item, uploadedBy: advertiserId })),
+      ];
+    } else if (!Array.isArray(updateData.materials) || updateData.materials.length === 0) {
+      delete updateData.materials;
+    }
+
     const updatedDraft = await draftService.autoSaveDraft(req.draft, updateData, clientVersion);
+
+    if (newCover?.publicId && req.draft.coverImagePublicId) {
+      await deleteFilesFromStorage([{ publicId: req.draft.coverImagePublicId, resourceType: 'image' }]);
+    }
 
     res.status(200).json({
       success: true,
@@ -162,10 +203,32 @@ const autoSaveDraft = async (req, res) => {
       draft: updatedDraft,
     });
   } catch (error) {
-    const statusCode = error.statusCode || 500;
+    console.error('[campaignDraft.controller] autoSaveDraft error:', error);
+    try {
+      const orphaned = newMaterials
+        .filter((item) => item.publicId)
+        .map((item) => ({ publicId: item.publicId, resourceType: item.resourceType }));
+      if (newCover?.publicId) orphaned.push({ publicId: newCover.publicId, resourceType: 'image' });
+      if (orphaned.length) await deleteFilesFromStorage(orphaned);
+    } catch (cleanupError) {
+      console.warn('[campaignDraft.controller] autoSaveDraft cleanup error:', cleanupError.message);
+    }
+
+    let statusCode = error.statusCode || 500;
+    let message = error.statusCode ? error.message : 'Server error during auto-save';
+
+    if (error.name === 'ValidationError') {
+      statusCode = 400;
+      message = error.message;
+    } else if (error.name === 'CastError') {
+      statusCode = 400;
+      message = `Invalid value for field ${error.path}`;
+    }
+
     res.status(statusCode).json({
       success: false,
-      message: error.statusCode ? error.message : 'Server error during auto-save',
+      message,
+      error: error.message,
     });
   }
 };
