@@ -14,7 +14,7 @@ passport.use(
     async (req, accessToken, refreshToken, profile, done) => { // أضفنا req في البداية
       try {
         // البحث عن المستخدم بـ googleId أو بالإيميل
-        let user = await User.findOne({ email: profile.emails[0].value });
+        let user = await User.findOne({ email: profile.emails[0].value }).select('+tokenVersion');
 
         if (!user) {
           // إنشاء حساب جديد إذا لم يكن موجوداً
