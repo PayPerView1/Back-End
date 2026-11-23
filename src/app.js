@@ -7,18 +7,22 @@ const passport = require('passport');
 require('./config/passport');
 
 const authRoutes = require('./routes/authRoutes');
+const apiDocsRoutes = require('./routes/docs.routes');
 const profileRoutes = require('./routes/profileRoutes');
 const campaignDraftRoutes = require('./routes/campaign/campaignDraft.routes');
 const campaignCreationRoutes = require('./routes/campaign/campaignCreation.routes');
 const campaignManagementRoutes= require('./routes/campaign/campaignManagement.routes');
 const campaignCategoryRoutes  = require('./routes/campaign/campaignCategory.routes');
 const chatRoutes = require('./routes/ai/chat.routes');
+const aiIntelligenceRoutes = require('./routes/ai/intelligence.routes');
 // Wallet imports
 const walletFundingRoutes      = require('./routes/wallet/walletFunding.routes');
 const transactionHistoryRoutes = require('./routes/wallet/transactionHistory.routes');
 const walletRefundRoutes       = require('./routes/wallet/walletRefund.routes');
 const campaignBudgetRoutes     = require('./routes/wallet/campaignBudget.routes');
 const walletAdminRoutes        = require('./routes/admin/walletAdmin.routes');
+const withdrawalAdminRoutes    = require('./routes/admin/withdrawalAdmin.routes');
+const creatorEarningsRoutes    = require('./routes/wallet/creatorEarnings.routes');
 // Sprint 4 imports
 const campaignDiscoveryRoutes  = require('./routes/campaign/campaignDiscovery.routes');
 const applicationRoutes        = require('./routes/application/application.routes');
@@ -30,11 +34,30 @@ const notificationRoutes       = require('./routes/notification/notification.rou
 const materialRoutes        = require('./routes/material/material.routes');
 const submissionRoutes      = require('./routes/submission/submission.routes');
 const submissionAdminRoutes = require('./routes/admin/submissionAdmin.routes');
+const submissionViewsRoutes = require('./routes/submission/submissionViews.routes');
 const app = express();
 app.use(passport.initialize());
 
 // Middlewares أساسية
-app.use(cors());
+const allowedFrontendOrigins = new Set(
+  (process.env.FRONTEND_ORIGINS || process.env.FRONTEND_URL || 'http://localhost:3000')
+    .split(',')
+    .map((origin) => origin.trim().replace(/\/$/, ''))
+    .filter(Boolean)
+);
+app.use(cors({
+  origin(origin, callback) {
+    // Requests without Origin are server-to-server or local health checks.
+    if (!origin || allowedFrontendOrigins.has(origin.replace(/\/$/, ''))) {
+      return callback(null, true);
+    }
+    return callback(null, false);
+  },
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Authorization', 'Content-Type', 'Accept'],
+  credentials: false,
+  maxAge: 86400,
+}));
 app.set('trust proxy', 1);
 // ⚠️ لازم يجي قبل express.json() — عشان PayPal webhook يحتاج raw body للتحقق من الـ signature
 app.use(
@@ -49,17 +72,24 @@ app.use(                                           // ← جديد
 app.use(express.json()); // لقراءة البيانات القادمة بصيغة JSON
 
 // عشان الصور المرفوعة تصير قابلة للوصول عن طريق رابط مباشر
-// مثال: http://localhost:5000/uploads/profile-pictures/xxx.jpg
-// app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// مثال: http://localhost:5000/uploads/campaign-covers/xxx.jpg
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // مسار تجريبي (Health Check)
 app.get('/', (req, res) => {
   res.send('Halal Clipping API is Running...');
 });
 
+// API reference endpoints are served from the checked-in OpenAPI source of truth.
+app.use(apiDocsRoutes);
+
 // ربط المسارات
+app.use('/api/v1', aiIntelligenceRoutes);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/profile', profileRoutes);
+// مسارات الفئات العامة الثابتة تسبق مسارات الحملات العامة المحمية ذات المعرّف المتغير.
+app.use('/api/v1/campaigns/categories', campaignCategoryRoutes);
+app.use('/api/v1/categories', campaignCategoryRoutes);
 // Wallet routes — كل router يُركَّب مرة واحدة فقط
 // (transactions أولاً لأنها أكثر تحديداً من /api/v1/wallet)
 app.use('/api/v1/wallet/transactions', transactionHistoryRoutes);
@@ -69,6 +99,8 @@ app.use('/api/v1/wallet', walletFundingRoutes); // /, /fund, /bank-details, webh
 // Admin wallet routes: PUT /bank-transfer/:id و PUT /refund/:id
 // (بادئة /admin مجرد تنظيم للمسارات؛ الحماية الفعلية adminOnly داخل الـ router)
 app.use('/api/v1/admin/wallet', walletAdminRoutes);
+app.use('/api/v1', withdrawalAdminRoutes);
+app.use('/api/v1', creatorEarningsRoutes);
 // ⚠️ مسارات الأدمن للتسليم معرّفة داخل الـ router بمسارها الكامل (/admin/submissions/...)
 //    لذلك يُركَّب على /api/v1 وليس /api/v1/admin وإلا صارت البادئة مكرّرة.
 app.use('/api/v1', submissionAdminRoutes);
@@ -98,6 +130,7 @@ app.use('/api/v1/notifications', notificationRoutes);
 // ═══════════════════════════════════════════════════════════════
 app.use('/api/v1', materialRoutes);
 app.use('/api/v1', submissionRoutes);
+app.use('/api/v1', submissionViewsRoutes);
 
 // Campaign budget routes
 // مركَّب على /api/v1/campaigns ومساراته /:campaignId/budget ... (الـ middleware على كل route)
@@ -109,6 +142,5 @@ app.use('/api/v1/campaigns/:campaignId', campaignBudgetRoutes);
 app.use('/api/v1/campaigns/drafts', campaignDraftRoutes);
 app.use('/api/v1/campaigns', campaignCreationRoutes);
 app.use('/api/v1/campaigns', campaignManagementRoutes);
-app.use('/api/v1/categories', campaignCategoryRoutes);
 app.use('/api/v1/chat', chatRoutes);
 module.exports = app;
