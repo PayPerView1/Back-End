@@ -24,17 +24,21 @@ const { AI_REVIEW_RESULT } = require('../constants/campaign.constants');
 jest.mock('../services/submission/submissionNotifications.service', () => ({
   notifyCreatorApproved: jest.fn(),
   notifyCreatorRejected: jest.fn(),
+  notifyCreatorEditsRequested: jest.fn(),
   notifyBrandNewSubmission: jest.fn(),
 }));
 
 const {
   notifyCreatorApproved,
   notifyCreatorRejected,
+  notifyCreatorEditsRequested,
   notifyBrandNewSubmission,
 } = require('../services/submission/submissionNotifications.service');
 const {
   getCampaignSubmissions,
   reviewSubmission,
+  bulkApproveSubmissions,
+  bulkReviewSubmissions,
   getManualReviewQueue,
   decideManualReview,
   autoApproveDueSubmissions,
@@ -52,6 +56,7 @@ afterEach(async () => {
 beforeEach(() => {
   notifyCreatorApproved.mockResolvedValue(null);
   notifyCreatorRejected.mockResolvedValue(null);
+  notifyCreatorEditsRequested.mockResolvedValue(null);
   notifyBrandNewSubmission.mockResolvedValue(null);
 });
 
@@ -258,6 +263,28 @@ describe('reviewSubmission (§6.2)', () => {
     expect(notifyCreatorApproved).not.toHaveBeenCalled();
   });
 
+  test('REQUEST_EDITS: يميّز طلب التعديل عن الرفض النهائي ويسمح بإعادة التسليم', async () => {
+    const ctx = await setup();
+    const submission = await awaitingSubmission(ctx);
+
+    const result = await reviewSubmission(submission._id, ctx.brand._id, {
+      decision: 'REQUEST_EDITS',
+      note: 'يرجى إضافة الشعار المطلوب',
+    });
+
+    expect(result.displayStatus).toBe(DISPLAY_STATUS.CHANGES_REQUESTED);
+    const saved = await Submission.findById(submission._id);
+    expect(saved.status).toBe(SUBMISSION_STATUS.REJECTED);
+    expect(saved.advertiserReview.status).toBe(ADVERTISER_STATUS.CHANGES_REQUESTED);
+    expect(saved.linkLocked).toBe(false);
+    expect(saved.rejectionReasons[0].code).toBe('EDITS_REQUESTED');
+    expect(notifyCreatorEditsRequested).toHaveBeenCalledWith(
+      expect.objectContaining({ creatorId: ctx.creator._id }),
+      expect.objectContaining({ _id: ctx.campaign._id }),
+      { note: 'يرجى إضافة الشعار المطلوب' }
+    );
+  });
+
   test('يرفض مراجعة تسليم ليس في مرحلة المعلن بـ SUBMISSION_ALREADY_REVIEWED', async () => {
     const ctx = await setup();
     const processing = await f.createSubmission(ctx, { status: SUBMISSION_STATUS.SUBMITTED });
@@ -306,6 +333,62 @@ describe('reviewSubmission (§6.2)', () => {
 
     expect(invalid.code).toBe('NOT_FOUND');
     expect(missing.code).toBe('NOT_FOUND');
+  });
+});
+
+describe('bulkApproveSubmissions', () => {
+  test('يعتمد مجموعة تسليمات مملوكة للحملة ويحدّث العداد مرة واحدة', async () => {
+    const ctx = await setup();
+    const submissions = [await awaitingSubmission(ctx), await awaitingSubmission(ctx)];
+
+    const result = await bulkApproveSubmissions(
+      ctx.campaign._id,
+      ctx.brand._id,
+      submissions.map((item) => item._id.toString())
+    );
+
+    expect(result.approvedCount).toBe(2);
+    expect((await Submission.find({ _id: { $in: submissions.map((item) => item._id) } })).every(
+      (item) => item.status === SUBMISSION_STATUS.APPROVED
+    )).toBe(true);
+    const campaign = await Campaign.findById(ctx.campaign._id);
+    expect(campaign.stats.totalApprovedVideos).toBe(2);
+    expect(notifyCreatorApproved).toHaveBeenCalledTimes(2);
+  });
+
+  test('رفض المجموعة كاملة إذا كان أحد التسليمات قد غادر مرحلة المراجعة', async () => {
+    const ctx = await setup();
+    const pending = await awaitingSubmission(ctx);
+    const rejected = await f.createSubmission(ctx, { status: SUBMISSION_STATUS.REJECTED });
+
+    const error = await errorOf(bulkApproveSubmissions(
+      ctx.campaign._id,
+      ctx.brand._id,
+      [pending._id.toString(), rejected._id.toString()]
+    ));
+
+    expect(error.code).toBe('SUBMISSION_ALREADY_REVIEWED');
+    expect((await Submission.findById(pending._id)).status).toBe(SUBMISSION_STATUS.UNDER_REVIEW);
+    expect(notifyCreatorApproved).not.toHaveBeenCalled();
+  });
+
+  test('يرفض المجموعة كاملة ويرسل سبب الرفض لكل مبدع', async () => {
+    const ctx = await setup();
+    const submissions = [await awaitingSubmission(ctx), await awaitingSubmission(ctx)];
+
+    const result = await bulkReviewSubmissions(ctx.campaign._id, ctx.brand._id, {
+      submissionIds: submissions.map((item) => item._id.toString()),
+      decision: 'REJECT',
+      note: 'Please revise the clip',
+    });
+
+    expect(result.rejectedCount).toBe(2);
+    const saved = await Submission.find({ _id: { $in: submissions.map((item) => item._id) } });
+    expect(saved.every((item) => item.status === SUBMISSION_STATUS.REJECTED)).toBe(true);
+    expect(saved.every((item) => item.advertiserReview.status === ADVERTISER_STATUS.REJECTED)).toBe(true);
+    expect(saved.every((item) => item.linkLocked === false)).toBe(true);
+    expect((await Campaign.findById(ctx.campaign._id)).stats.totalApprovedVideos).toBe(0);
+    expect(notifyCreatorRejected).toHaveBeenCalledTimes(2);
   });
 });
 

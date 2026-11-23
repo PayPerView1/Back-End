@@ -1,6 +1,7 @@
 // src/services/campaign/fileUpload.service.js
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const cloudinary = require('../../config/cloudinary');
 const { MATERIAL_CONSTRAINTS, MATERIAL_TYPE } = require('../../constants/campaign.constants');
@@ -102,6 +103,19 @@ const uploadMaterials = (req, res, next) => {
   });
 };
 
+const parseCampaignMultipartJson = (req, res, next) => {
+  const fields = ['brief', 'targetCountries', 'subCategories', 'halalDeclaration', 'requirements', 'submissionRequirements', 'materials'];
+  for (const field of fields) {
+    if (typeof req.body?.[field] !== 'string') continue;
+    try {
+      req.body[field] = JSON.parse(req.body[field]);
+    } catch {
+      return res.status(400).json({ success: false, message: `Invalid JSON in ${field}` });
+    }
+  }
+  return next();
+};
+
 function handleMulterError(err, res) {
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_FILE_SIZE') {
@@ -139,17 +153,34 @@ async function uploadFilesToStorage(files) {
 
   const uploadedMaterials = [];
   for (const file of files) {
-    const result = await new Promise((resolve, reject) => {
-      const stream = cloudinary.uploader.upload_stream(
-        {
-          folder: 'campaign-materials',
-          resource_type: 'auto',
-          public_id: `${Date.now()}-${path.parse(file.originalname).name.replace(/[^a-zA-Z0-9_-]/g, '_')}`,
-        },
-        (err, res) => (err ? reject(err) : resolve(res))
-      );
-      stream.end(file.buffer);
-    });
+    let result = null;
+    try {
+      result = await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          {
+            folder: 'campaign-materials',
+            resource_type: 'auto',
+            public_id: `${Date.now()}-${path.parse(file.originalname).name.replace(/[^a-zA-Z0-9_-]/g, '_')}`,
+          },
+          (err, res) => (err ? reject(err) : resolve(res))
+        );
+        stream.end(file.buffer);
+      });
+    } catch (cloudinaryError) {
+      console.warn('[fileUpload.service] Cloudinary uploadFilesToStorage failed, saving locally:', cloudinaryError.message || cloudinaryError);
+      const ext = path.extname(file.originalname) || '';
+      const safeName = path.parse(file.originalname).name.replace(/[^a-zA-Z0-9_-]/g, '_') || 'file';
+      const filename = `mat_${Date.now()}_${safeName}${ext}`;
+      const uploadDir = path.join(process.cwd(), 'uploads', 'campaign-materials');
+      fs.mkdirSync(uploadDir, { recursive: true });
+      fs.writeFileSync(path.join(uploadDir, filename), file.buffer);
+      const host = process.env.BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
+      result = {
+        secure_url: `${host}/uploads/campaign-materials/${filename}`,
+        public_id: `local_${filename}`,
+        resource_type: file.mimetype.startsWith('video/') ? 'video' : file.mimetype.startsWith('image/') ? 'image' : 'raw',
+      };
+    }
 
     uploadedMaterials.push({
       fileName: file.originalname,
@@ -204,6 +235,15 @@ async function deleteFilesFromStorage(items) {
       }
       if (!publicId) continue;
 
+      if (publicId.startsWith('local_')) {
+        const filename = publicId.replace('local_', '');
+        const coverPath = path.join(process.cwd(), 'uploads', 'campaign-covers', filename);
+        const matPath = path.join(process.cwd(), 'uploads', 'campaign-materials', filename);
+        if (fs.existsSync(coverPath)) fs.unlinkSync(coverPath);
+        if (fs.existsSync(matPath)) fs.unlinkSync(matPath);
+        continue;
+      }
+
       // Cloudinary destroy مبيحبش 'auto' دائمًا — نجرّب الأنواع بالترتيب
       if (resourceType === 'auto') {
         const types = ['image', 'video', 'raw'];
@@ -232,27 +272,43 @@ async function deleteFilesFromStorage(items) {
 async function uploadCoverImage(file) {
   if (!file || !file.buffer) return null;
   
-  return new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream(
-      {
-        folder: 'campaign-covers',
-        resource_type: 'image',
-      },
-      (err, result) => {
-        if (err) return reject(err);
-        resolve({
-          url: result.secure_url,
-          publicId: result.public_id,
-          resourceType: 'image',
-        });
-      }
-    );
-    stream.end(file.buffer);
-  });
+  try {
+    return await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        {
+          folder: 'campaign-covers',
+          resource_type: 'image',
+        },
+        (err, result) => {
+          if (err) return reject(err);
+          resolve({
+            url: result.secure_url,
+            publicId: result.public_id,
+            resourceType: 'image',
+          });
+        }
+      );
+      stream.end(file.buffer);
+    });
+  } catch (cloudinaryError) {
+    console.warn('[fileUpload.service] Cloudinary uploadCoverImage failed, saving locally:', cloudinaryError.message || cloudinaryError);
+    const ext = path.extname(file.originalname) || '.jpg';
+    const filename = `cover_${Date.now()}_${Math.random().toString(36).slice(2, 8)}${ext}`;
+    const uploadDir = path.join(process.cwd(), 'uploads', 'campaign-covers');
+    fs.mkdirSync(uploadDir, { recursive: true });
+    fs.writeFileSync(path.join(uploadDir, filename), file.buffer);
+    const host = process.env.BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
+    return {
+      url: `${host}/uploads/campaign-covers/${filename}`,
+      publicId: `local_${filename}`,
+      resourceType: 'image',
+    };
+  }
 }
 
 module.exports = {
   uploadMaterials,
+  parseCampaignMultipartJson,
   validateFileType,
   validateFileSize,
   validateFilesCount,
