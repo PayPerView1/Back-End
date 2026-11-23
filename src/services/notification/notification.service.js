@@ -53,6 +53,21 @@ async function notifyUser(userId, payload, emailFn) {
   return notification;
 }
 
+async function notifyUserOnce(userId, payload, dedupeKey) {
+  if (typeof dedupeKey !== 'string' || !dedupeKey.trim()) return null;
+  try {
+    const result = await Notification.updateOne(
+      { userId, dedupeKey },
+      { $setOnInsert: { userId, dedupeKey, type: payload.type, title: payload.title, message: payload.message, data: payload.data || {} } },
+      { upsert: true }
+    );
+    return result.upsertedCount === 1 ? { created: true } : null;
+  } catch (error) {
+    if (error.code !== 11000) logError('notifyUserOnce', error);
+    return null;
+  }
+}
+
 /**
  * يحفظ عدة إشعارات دفعة واحدة (كل عنصر قد يختلف بـ data، مثل favoriteId).
  * @param {Array<{ userId, type, title, message, data? }>} docs
@@ -181,6 +196,7 @@ async function markAllAsRead(userId) {
 
 module.exports = {
   notifyUser,
+  notifyUserOnce,
   notifyMany,
   notifyAdmins,
   createManyNotifications,

@@ -53,6 +53,20 @@ const userSchema = new mongoose.Schema(
       default: 'BRAND',
       required: true,
     },
+    // يزداد عند تسجيل الخروج أو تغيير كلمة المرور لإبطال JWTs لدى الـ Main Backend.
+    tokenVersion: {
+      type: Number,
+      default: 0,
+      select: false,
+      min: 0,
+    },
+    // يضمن تسلسلاً ذرياً لفحوصات حد التسليمات المتزامنة لكل مبدع.
+    submissionLimitSequence: {
+      type: Number,
+      default: 0,
+      select: false,
+      min: 0,
+    },
     googleId: {
       type: String,
       default: null,
@@ -149,5 +163,5 @@ userSchema.methods.createEmailVerificationToken = function () {
 
   return verificationToken;
 };
-module.exports = mongoose.model('User', userSchema);
+module.exports = mongoose.models.User || mongoose.model('User', userSchema);
 module.exports.INTEREST_OPTIONS = INTEREST_OPTIONS;

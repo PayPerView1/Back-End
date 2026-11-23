@@ -43,26 +43,27 @@ const draftCreationRules = [
 // من النوع/الشكل الصحيح. ما فينا نفرض "اكتمال" هون، هاد بس شغل validateDraftSubmission
 const draftUpdateRules = [
   body('name')
-    .optional()
+    .optional({ checkFalsy: true })
     .trim()
     .isLength({ min: 1, max: 255 })
     .withMessage('Draft name cannot exceed 255 characters'),
 
   body('contentType')
-    .optional()
+    .optional({ checkFalsy: true })
     .isIn(Object.values(CONTENT_TYPE))
     .withMessage(`Content type must be one of: ${Object.values(CONTENT_TYPE).join(', ')}`),
 
   body('category')
-    .optional()
+    .optional({ checkFalsy: true })
     .isIn(Object.values(CONTENT_TYPE))
     .withMessage(`Category must be one of: ${Object.values(CONTENT_TYPE).join(', ')}`),
 
   body('subCategories')
-    .optional()
+    .optional({ checkFalsy: true })
     .isArray()
     .withMessage('Sub-categories must be an array')
     .custom((value) => {
+      if (!Array.isArray(value)) return true;
       const invalidValues = value.filter((v) => !MIXED_SUB_CATEGORIES.includes(v));
       if (invalidValues.length > 0) {
         throw new Error(`Invalid sub-categories: ${invalidValues.join(', ')}`);
@@ -71,50 +72,64 @@ const draftUpdateRules = [
     }),
 
   body('totalBudget')
-    .optional()
-    .isFloat({ gt: 0 })
-    .withMessage('Total budget must be a positive number'),
+    .optional({ checkFalsy: true })
+    .custom((val) => {
+      const num = Number(val);
+      if (isNaN(num) || num <= 0) {
+        throw new Error('Total budget must be a positive number');
+      }
+      return true;
+    }),
 
   body('cpm')
-    .optional()
-    .isFloat({ gt: 0 })
-    .withMessage('CPM must be a positive number'),
+    .optional({ checkFalsy: true })
+    .custom((val) => {
+      const num = Number(val);
+      if (isNaN(num) || num <= 0) {
+        throw new Error('CPM must be a positive number');
+      }
+      return true;
+    }),
 
   body('dailyBudgetLimit')
-    .optional()
+    .optional({ checkFalsy: true })
     .isFloat({ gt: 0 })
     .withMessage('Daily budget limit must be a positive number if provided'),
 
   body('brief.mainIdea')
-    .optional()
+    .optional({ checkFalsy: true })
     .trim()
     .notEmpty()
     .withMessage('Brief main idea cannot be empty if provided'),
 
   body('targetCountries')
-    .optional()
+    .optional({ checkFalsy: true })
     .isArray({ min: 1 })
     .withMessage('Target countries must be a non-empty array if provided')
-   .custom((value, { req }) => {
-     const { valid, invalid } = normalizeCountryList(value);
-     if (invalid.length > 0) {
-       throw new Error(`Invalid country codes (use ISO alpha-3, e.g. SAU): ${invalid.join(', ')}`);
-     }
-     req.body.targetCountries = valid; // أحرف كبيرة، بدون تكرار
-     return true;
-   }),
+    .custom((value, { req }) => {
+      if (!Array.isArray(value) || value.length === 0) return true;
+      const { valid, invalid } = normalizeCountryList(value);
+      if (invalid.length > 0) {
+        throw new Error(`Invalid country codes (use ISO alpha-3, e.g. SAU): ${invalid.join(', ')}`);
+      }
+      req.body.targetCountries = valid;
+      return true;
+    }),
 
-  // هون بس checkbox عام بسيط (halalDeclared: Boolean) — مش الـ 6 تفاصيل الدقيقة
-  // (هاي التفاصيل الكاملة بتنبعت لاحقًا وقت submit نفسه، مش أثناء التسويد العادي)
   body('halalDeclared')
-    .optional()
+    .optional({ checkFalsy: true })
     .isBoolean()
     .withMessage('halalDeclared must be true or false'),
-    // Sprint 4: إضافة maxApplicants و requirements للمسودة
-    body('startDate').optional({ nullable: true })
+  body('halalDeclaration').optional({ checkFalsy: true }).isObject().withMessage('halalDeclaration must be an object'),
+  ...[
+    'noGambling', 'noSexualContent', 'noExplicitMusic', 'noAlcohol',
+    'noSuspiciousCurrencies', 'noUnrealisticProfit',
+  ].map((field) => body(`halalDeclaration.${field}`).optional({ checkFalsy: true }).isBoolean()),
+  body('clientVersion').optional({ checkFalsy: true }).isInt({ min: 1 }).toInt(),
+  body('startDate').optional({ checkFalsy: true, nullable: true })
     .isISO8601().withMessage('Start date must be a valid date').toDate(),
 
-  body('endDate').optional({ nullable: true })
+  body('endDate').optional({ checkFalsy: true, nullable: true })
     .isISO8601().withMessage('End date must be a valid date').toDate()
     .custom((value, { req }) => {
       if (value && req.body.startDate && new Date(value) <= new Date(req.body.startDate)) {
@@ -214,7 +229,7 @@ const validateDraftSubmission = (req, res, next) => {
   }
 
   // ⬇️ إضافة: تحويل halalDeclaration إذا كانت String
-  let halalDeclaration = req.body.halalDeclaration;
+  let halalDeclaration = req.body.halalDeclaration || draft.halalDeclaration;
   if (typeof halalDeclaration === 'string') {
     try {
       halalDeclaration = JSON.parse(halalDeclaration);

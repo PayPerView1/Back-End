@@ -53,6 +53,36 @@ const reviewSubmission = async (req, res) => {
   }
 };
 
+const bulkApproveSubmissions = async (req, res) => {
+  try {
+    const { campaignId } = req.validated?.params || req.params;
+    const { submissionIds } = req.validated?.body || req.body;
+    const data = await submissionReviewService.bulkApproveSubmissions(
+      campaignId,
+      req.user._id,
+      submissionIds
+    );
+
+    return res.status(200).json({ success: true, data });
+  } catch (error) {
+    return sendError(res, error, 'submissionReview.bulkApproveSubmissions');
+  }
+};
+
+const bulkReviewSubmissions = async (req, res) => {
+  try {
+    const { campaignId } = req.validated?.params || req.params;
+    const data = await submissionReviewService.bulkReviewSubmissions(
+      campaignId,
+      req.user._id,
+      req.validated?.body || req.body
+    );
+    return res.status(200).json({ success: true, data });
+  } catch (error) {
+    return sendError(res, error, 'submissionReview.bulkReviewSubmissions');
+  }
+};
+
 // ============================================
 // GET /api/v1/admin/submissions/manual-review — ADMIN
 // ============================================
@@ -98,6 +128,8 @@ const decideManualReview = async (req, res) => {
 module.exports = {
   getCampaignSubmissions,
   reviewSubmission,
+  bulkApproveSubmissions,
+  bulkReviewSubmissions,
   getManualReviewQueue,
   decideManualReview,
 };

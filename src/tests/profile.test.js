@@ -11,13 +11,26 @@ const generateToken = require('../utils/generateTokens');
 
 jest.setTimeout(40000);                               // ✅ جديد
 
-// ⚠️ لو انتقلت لـ Cloudinary، أضف هذا الـ mock:
-// jest.mock('../src/services/fileUpload.service', () => ({
-//   uploadProfilePicture: jest.fn().mockResolvedValue({
-//     url: '/uploads/profile-pictures/test.png',
-//     publicId: 'test',
-//   }),
-// }));
+jest.mock('multer-storage-cloudinary', () => {
+  const multer = require('multer');
+  return {
+    CloudinaryStorage: jest.fn().mockImplementation(() => {
+      const storage = multer.memoryStorage();
+      const origHandle = storage._handleFile;
+      storage._handleFile = (req, file, cb) => {
+        origHandle.call(storage, req, file, (err, info) => {
+          if (err) return cb(err);
+          cb(null, {
+            ...info,
+            path: 'https://res.cloudinary.com/test/image/upload/v1234/profile-pictures/test.png',
+            filename: 'profile-pictures/test',
+          });
+        });
+      };
+      return storage;
+    }),
+  };
+});
 
 let testUser;
 let token;

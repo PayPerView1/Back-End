@@ -3,6 +3,11 @@ const User = require('../models/user');
 const { sendEmail } = require('../services/emailService');
 const generateToken = require('../utils/generateTokens');
 
+const GENERIC_RESEND_MESSAGE =
+  'If the account exists and is not verified, an activation email will be sent.';
+const GENERIC_PASSWORD_RESET_MESSAGE =
+  'If an account exists for that address, password reset instructions will be sent.';
+
 // تعبير نمطي لمراقبة تعقيد كلمة المرور
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
 const PASSWORD_ERROR_MSG = 'Password must contain at least 8 characters, one uppercase letter, one lowercase letter, one number, and one special character.';
@@ -102,9 +107,13 @@ exports.register = async (req, res) => {
     }
 
   } catch (error) {
-    res.status(400).json({
+    console.error('[AUTH] registration failed:', error.name || 'Error');
+    const isClientError = error.name === 'ValidationError' || error.code === 11000;
+    res.status(isClientError ? 400 : 500).json({
       success: false,
-      message: error.message,
+      message: isClientError
+        ? 'Please check the submitted registration details.'
+        : 'Unable to complete registration right now. Please try again later.',
     });
   }
 };
@@ -116,27 +125,12 @@ exports.register = async (req, res) => {
 exports.resendVerification = async (req, res) => {
   try {
     const { email } = req.body;
-
-    if (!email) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide an email address.',
-      });
-    }
-
     const user = await User.findOne({ email });
 
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'There is no user registered with that email.',
-      });
-    }
-
-    if (user.isVerified) {
-      return res.status(400).json({
-        success: false,
-        message: 'This account is already verified. You can log in.',
+    if (!user || user.isVerified) {
+      return res.status(200).json({
+        success: true,
+        message: GENERIC_RESEND_MESSAGE,
       });
     }
 
@@ -157,7 +151,7 @@ exports.resendVerification = async (req, res) => {
 
       return res.status(200).json({
         success: true,
-        message: 'Activation email sent successfully! Please check your inbox.',
+        message: GENERIC_RESEND_MESSAGE,
       });
     } catch (emailError) {
       user.emailVerificationToken = undefined;
@@ -165,16 +159,17 @@ exports.resendVerification = async (req, res) => {
       await user.save({ validateBeforeSave: false });
 
       console.error('[EMAIL ERROR]:', emailError.message);
-      return res.status(500).json({
-        success: false,
-        message: 'There was an error sending the activation email. Please try again later.',
+      return res.status(200).json({
+        success: true,
+        message: GENERIC_RESEND_MESSAGE,
       });
     }
 
   } catch (error) {
+    console.error('[AUTH] resend verification failed:', error.name || 'Error');
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: 'Unable to process the request. Please try again later.',
     });
   }
 };
@@ -213,7 +208,7 @@ exports.verifyEmail = async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: 'Unable to verify this account right now. Please try again later.',
     });
   }
 };
@@ -225,14 +220,7 @@ exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide email and password.',
-      });
-    }
-
-    const user = await User.findOne({ email }).select('+password');
+    const user = await User.findOne({ email }).select('+password +tokenVersion');
 
     if (!user || !(await user.matchPassword(password))) {
       return res.status(401).json({
@@ -248,7 +236,7 @@ exports.login = async (req, res) => {
       });
     }
 
-    const token = generateToken(user._id, user.role);
+    const token = generateToken(user._id, user.role, user.tokenVersion);
 
     res.status(200).json({
       success: true,
@@ -265,9 +253,10 @@ exports.login = async (req, res) => {
       },
     });
   } catch (error) {
+    console.error('[AUTH] login failed:', error.name || 'Error');
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: 'Unable to log in right now. Please try again later.',
     });
   }
 };
@@ -281,9 +270,9 @@ exports.forgotPassword = async (req, res) => {
     const user = await User.findOne({ email });
 
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'There is no user registered with that email.',
+      return res.status(200).json({
+        success: true,
+        message: GENERIC_PASSWORD_RESET_MESSAGE,
       });
     }
 
@@ -309,7 +298,7 @@ exports.forgotPassword = async (req, res) => {
 
       return res.status(200).json({
         success: true,
-        message: 'Password reset link sent to your email.',
+        message: GENERIC_PASSWORD_RESET_MESSAGE,
       });
     } catch (emailError) {
       user.passwordResetToken = undefined;
@@ -317,16 +306,17 @@ exports.forgotPassword = async (req, res) => {
       await user.save({ validateBeforeSave: false });
 
       console.error('[EMAIL ERROR]:', emailError.message);
-      return res.status(500).json({
-        success: false,
-        message: 'There was an error sending the email. Try again later.',
+      return res.status(200).json({
+        success: true,
+        message: GENERIC_PASSWORD_RESET_MESSAGE,
       });
     }
 
   } catch (error) {
+    console.error('[AUTH] forgot password failed:', error.name || 'Error');
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: 'Unable to process the request. Please try again later.',
     });
   }
 };
@@ -367,7 +357,7 @@ exports.resetPassword = async (req, res) => {
     const user = await User.findOne({
       passwordResetToken: hashedToken,
       passwordResetExpires: { $gt: Date.now() },
-    });
+    }).select('+tokenVersion');
 
     if (!user) {
       return res.status(400).json({
@@ -379,6 +369,7 @@ exports.resetPassword = async (req, res) => {
     user.password = password;
     user.passwordResetToken = undefined;
     user.passwordResetExpires = undefined;
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
     await user.save();
 
     res.status(200).json({
@@ -386,9 +377,10 @@ exports.resetPassword = async (req, res) => {
       message: 'Password updated successfully! You can now log in.',
     });
   } catch (error) {
-    res.status(400).json({
+    console.error('[AUTH] reset password failed:', error.name || 'Error');
+    res.status(500).json({
       success: false,
-      message: error.message,
+      message: 'Unable to reset the password right now. Please try again later.',
     });
   }
 };
@@ -398,13 +390,17 @@ exports.resetPassword = async (req, res) => {
 // @access  Private
 exports.changePassword = async (req, res) => {
   try {
-    const { currentPassword, newPassword } = req.body;
+    const { currentPassword, newPassword, confirmPassword } = req.body;
 
-    if (!currentPassword || !newPassword) {
+    if (!currentPassword || !newPassword || !confirmPassword) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide both current and new password.',
+        message: 'Please provide currentPassword, newPassword, and confirmPassword.',
       });
+    }
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ success: false, message: 'New password and confirmation do not match.' });
     }
 
     if (!PASSWORD_REGEX.test(newPassword)) {
@@ -414,7 +410,7 @@ exports.changePassword = async (req, res) => {
       });
     }
 
-    const user = await User.findById(req.user._id).select('+password');
+    const user = await User.findById(req.user._id).select('+password +tokenVersion');
 
     const isMatch = await user.matchPassword(currentPassword);
     if (!isMatch) {
@@ -425,6 +421,7 @@ exports.changePassword = async (req, res) => {
     }
 
     user.password = newPassword;
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
     await user.save();
 
     res.status(200).json({
@@ -432,9 +429,10 @@ exports.changePassword = async (req, res) => {
       message: 'Password changed successfully!',
     });
   } catch (error) {
-    res.status(400).json({
+    console.error('[AUTH] change password failed:', error.name || 'Error');
+    res.status(500).json({
       success: false,
-      message: error.message,
+      message: 'Unable to change the password right now. Please try again later.',
     });
   }
 };
@@ -443,10 +441,20 @@ exports.changePassword = async (req, res) => {
 // @route   POST /api/v1/auth/logout
 // @access  Private
 exports.logout = async (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: 'Logged out successfully.',
-  });
+  try {
+    await User.updateOne({ _id: req.user._id }, { $inc: { tokenVersion: 1 } });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Logged out successfully.',
+    });
+  } catch (error) {
+    console.error('[AUTH] logout failed:', error.name || 'DatabaseError');
+    return res.status(500).json({
+      success: false,
+      message: 'Unable to log out right now. Please try again later.',
+    });
+  }
 };
 
 // @desc    Update user interests (US-AUTH-01 / Onboarding Step 3)
@@ -498,9 +506,10 @@ exports.updateInterests = async (req, res) => {
       },
     });
   } catch (error) {
+    console.error('[AUTH] update interests failed:', error.name || 'Error');
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: 'Unable to update interests right now. Please try again later.',
     });
   }
 };

@@ -112,6 +112,18 @@ const TEMPLATES = {
     title: 'Clip rejected',
     message: `Your clip for "${campaignName}" was rejected.${note ? ` Reason: ${note}` : ''}`,
   }),
+  [NOTIFICATION_TYPE.SUBMISSION_EDITS_REQUESTED]: ({ campaignName, note }) => ({
+    title: 'Clip edits requested',
+    message: `Please update your clip for "${campaignName}".${note ? ` Review notes: ${note}` : ''}`,
+  }),
+  [NOTIFICATION_TYPE.WITHDRAWAL_STATUS]: ({ amount, status, currency = 'USD' }) => ({
+    title: 'Withdrawal status updated',
+    message: `Your withdrawal request for ${amount} ${currency} is now ${status}.`,
+  }),
+  [NOTIFICATION_TYPE.EARNINGS_MILESTONE]: ({ views }) => ({
+    title: 'View milestone reached',
+    message: `Your approved clip has reached ${views} views.`,
+  }),
 
   [NOTIFICATION_TYPE.DOWNLOAD_COMPLETED]: ({ campaignName }) => ({
     title: 'Download completed',
