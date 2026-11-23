@@ -24,6 +24,8 @@ const connect = async () => {
 };
 
 const clearDatabase = async () => {
+  if (mongoose.connection.readyState !== 1) return;
+
   const { collections } = mongoose.connection;
   // مسح جميع البيانات من كل الجداول
   await Promise.all(Object.values(collections).map((collection) => collection.deleteMany({})));

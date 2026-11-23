@@ -8,7 +8,7 @@ const {
   requireBrandRole,
   verifyCampaignOwnership,
 } = require('../../middlewares/campaign/campaignValidationMiddleware');
-const { uploadMaterials } = require('../../services/campaign/fileUpload.service');
+const { uploadMaterials, parseCampaignMultipartJson } = require('../../services/campaign/fileUpload.service');
 const { campaignCreationRules, validate } = require('../../validators/campaign/campaignCreation.validator');
 
 // @route   POST /api/v1/campaigns
@@ -19,10 +19,12 @@ router.post(
   authMiddleware,
   requireBrandRole,
   uploadMaterials, // multer — بيرفع الملفات ويحطهم بـ req.files قبل الفاليديشن
+  parseCampaignMultipartJson,
   campaignCreationRules,
   validate,
   createCampaign
 );
+
 
 // @route   POST /api/v1/campaigns/:campaignId/ai-review
 // @desc    Trigger AI review for a campaign

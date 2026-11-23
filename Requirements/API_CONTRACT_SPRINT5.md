@@ -696,9 +696,9 @@ All jobs are **idempotent** and also run a catch-up pass at server start (the Re
 
 ---
 
-## 9. AI Service Contract (proposal — to agree with the AI engineer)
+## 9. AI Service Contract (implemented)
 
-Service-to-service call authenticated with `X-Service-Key: <AI_SERVICE_API_KEY>`. Timeout `AI_REVIEW_TIMEOUT_MS` (default 90s; the AI service may cold-start).
+Service-to-service calls use `X-Service-Key: <AI_SERVICE_API_KEY>`. Configure the same secret in Express and FastAPI; never expose it to the browser. Submission review timeout is `AI_REVIEW_TIMEOUT_MS` (default 90s). Campaign review uses a 100s timeout.
 
 ```
 POST {AI_SERVICE_URL}/api/v1/ai/submissions/review
@@ -740,14 +740,16 @@ POST {AI_SERVICE_URL}/api/v1/ai/submissions/review
 **Response 200**
 ```json
 {
-  "result": "APPROVED",
-  "score": 96,
-  "feedback": "Clip meets all requirements",
+  "result": "MANUAL_REVIEW_REQUIRED",
+  "score": null,
+  "feedback": "Media evidence is not available to the review service; a human must verify the submitted content.",
   "checks": [
-    { "code": "AUDIO_COMPLIANCE", "status": "PASSED", "message": "No music or instruments detected", "fixHint": "", "score": 100 },
-    { "code": "LOGO_VISIBLE", "status": "PASSED", "message": "Logo visible at the start", "fixHint": "", "score": 95 }
+    { "code": "VIDEO_FORMAT", "status": "NEEDS_REVIEW", "message": "Video media was not supplied for inspection.", "fixHint": "", "score": null },
+    { "code": "AUDIO_COMPLIANCE", "status": "NEEDS_REVIEW", "message": "Audio media was not supplied for inspection.", "fixHint": "", "score": null },
+    { "code": "LOGO_VISIBLE", "status": "NEEDS_REVIEW", "message": "Video frames were not supplied for inspection.", "fixHint": "", "score": null },
+    { "code": "PRESENTATION_QUALITY", "status": "NEEDS_REVIEW", "message": "Video media was not supplied for inspection.", "fixHint": "", "score": null }
   ],
-  "manualReasonCode": null
+  "manualReasonCode": "MEDIA_EVIDENCE_UNAVAILABLE"
 }
 ```
 | Field | Rules |
@@ -757,7 +759,9 @@ POST {AI_SERVICE_URL}/api/v1/ai/submissions/review
 | `checks[].status` | `PASSED`, `FAILED`, `NEEDS_REVIEW`, `SKIPPED` |
 | `manualReasonCode` | required when `result = MANUAL_REVIEW_REQUIRED` (e.g. `AUDIO_UNCERTAIN`) |
 
-On `REJECTED`, every `FAILED` check becomes a `rejectionReasons` entry, so each must carry a clear `message` and `fixHint`. Any non-2xx / timeout / schema mismatch counts as a failed attempt (see §8).
+The current submission payload contains text and metadata, not the actual video/audio or inspectable frames. Therefore this endpoint always requires human review for media-dependent decisions; it does not claim to verify audio, logo visibility, video format, or presentation quality. Enabling automated media approval/rejection requires a trusted media inspection pipeline. Any non-2xx / timeout / schema mismatch counts as a failed attempt (see §8).
+
+Campaign creation also calls `POST {AI_SERVICE_URL}/review` with `campaignName`, typed `brief`, `targetCountries`, and the six boolean halal declaration flags. Gemini returns `{ result, score, feedback }`; malformed responses or unavailable providers are routed to manual review by Express. The AI request excludes declaration owner/IP metadata.
 
 ---
 

@@ -3,6 +3,7 @@
 const cron = require('node-cron');
 const Campaign = require('../models/campaign');
 const CampaignActivityLog = require('../models/CampaignActivityLog');
+const CampaignBudgetSnapshot = require('../models/CampaignBudgetSnapshot');
 const { CAMPAIGN_STATUS, PAUSE_REASON, CAMPAIGN_ACTION } = require('../constants/campaign.constants');
 
 // ----------------------
@@ -13,13 +14,37 @@ const runDailyBudgetReset = async () => {
 
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
+  const yesterday = new Date(today);
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
 
-  // ----------------------
-  // الخطوة 1: Reset dailyBudgetSpent لكل الحملات
-  // ----------------------
+  // Persist only a complete, real UTC-day observation before resetting the counter.
+  // If the job missed a day, do not spread an accumulated value over invented dates.
+  const completedDayCampaigns = await Campaign.find({
+    dailyBudgetResetAt: yesterday,
+    createdAt: { $lt: today },
+  }).select('_id dailyBudgetSpent remainingBudget dailyBudgetLimit totalBudget category contentType').lean();
+  if (completedDayCampaigns.length) {
+    await CampaignBudgetSnapshot.bulkWrite(completedDayCampaigns.map((campaign) => ({
+      updateOne: {
+        filter: { campaignId: campaign._id, day: yesterday },
+        update: { $setOnInsert: {
+          campaignId: campaign._id,
+          day: yesterday,
+          dailySpend: Math.max(0, Number(campaign.dailyBudgetSpent) || 0),
+          remainingBudget: Math.max(0, Number(campaign.remainingBudget) || 0),
+          dailyBudgetLimit: campaign.dailyBudgetLimit ?? null,
+          totalBudget: Math.max(0, Number(campaign.totalBudget) || 0),
+          category: campaign.category || null,
+          contentType: campaign.contentType || null,
+        } },
+        upsert: true,
+      },
+    })), { ordered: false });
+  }
+
+  // Reset the daily counter for every campaign; spend tracking is used by analytics too.
   const resetResult = await Campaign.updateMany(
     {
-      dailyBudgetLimit: { $ne: null },
       $or: [
         { dailyBudgetResetAt: { $lt: today } },
         { dailyBudgetResetAt: null },

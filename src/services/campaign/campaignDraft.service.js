@@ -4,14 +4,68 @@ const User = require('../../models/user');
 const { sendEmail } = require('../emailService');
 const { deleteFilesFromStorage } = require('./fileUpload.service');
 const { logActivity } = require('./activityLog.service');
-const { createCampaign } = require('./campaignCreation.service');
+const { createCampaign, submitCampaignForReview } = require('./campaignCreation.service');
 const { CAMPAIGN_ACTION, CAMPAIGN_STATUS } = require('../../constants/campaign.constants');
-   const DRAFT_UPDATABLE_FIELDS = [
-     'name', 'contentType', 'category', 'subCategories', 'totalBudget', 'cpm',
-     'dailyBudgetLimit', 'brief', 'targetCountries', 'halalDeclared',
-     'startDate', 'endDate', 'maxApplicants', 'requirements', 'coverImage',
-     'submissionRequirements', 'maxSubmissionsPerCreator',
-   ];
+const DRAFT_UPDATABLE_FIELDS = [
+  'name', 'contentType', 'category', 'subCategories', 'totalBudget', 'cpm',
+  'dailyBudgetLimit', 'brief', 'targetCountries', 'halalDeclared',
+  'halalDeclaration', 'startDate', 'endDate', 'maxApplicants', 'requirements', 'coverImage',
+  'coverImagePublicId', 'materials', 'submissionRequirements', 'maxSubmissionsPerCreator',
+];
+
+function applyDraftFields(draft, updateData) {
+  DRAFT_UPDATABLE_FIELDS.forEach((field) => {
+    if (updateData[field] !== undefined) {
+      let val = updateData[field];
+      if (val === '') {
+        val = null;
+      }
+      if (['totalBudget', 'cpm', 'dailyBudgetLimit', 'maxApplicants', 'maxSubmissionsPerCreator'].includes(field)) {
+        val = Number(val) > 0 ? Number(val) : null;
+      }
+      if (['contentType', 'category'].includes(field) && val === null) {
+        draft[field] = null;
+        return;
+      }
+      if (['startDate', 'endDate'].includes(field) && (!val || val === '')) {
+        draft[field] = null;
+        return;
+      }
+      if (['brief', 'halalDeclaration', 'requirements', 'submissionRequirements'].includes(field) && typeof val === 'string') {
+        try {
+          val = JSON.parse(val);
+        } catch {
+          val = {};
+        }
+      }
+      if (field === 'targetCountries' && typeof val === 'string') {
+        try {
+          val = JSON.parse(val);
+        } catch {
+          val = [];
+        }
+      }
+      if (field === 'materials') {
+        if (typeof val === 'string') {
+          try {
+            val = JSON.parse(val);
+          } catch {
+            val = draft.materials || [];
+          }
+        }
+        if (!Array.isArray(val)) {
+          return;
+        }
+        // تجنب إسناد عناصر غير صالحة تخالف schema المواد
+        val = val.filter((item) => item && typeof item === 'object' && item.fileName && item.fileUrl && item.publicId);
+        if (val.length === 0 && draft.materials && draft.materials.length > 0) {
+          return; // الحفاظ على المواد الموجودة مسبقاً إذا كانت القيمة فارغة
+        }
+      }
+      draft[field] = val;
+    }
+  });
+}
 // ============================================
 // 6.1.1 — إنشاء مسودة جديدة
 // ============================================
@@ -33,6 +87,7 @@ async function createDraft(advertiserId, draftData) {
     brief: draftData.brief || {},
     targetCountries: draftData.targetCountries || [],
     halalDeclared: draftData.halalDeclared || false,
+    halalDeclaration: draftData.halalDeclaration || null,
     copyInfo: draftData.copyInfo || {},
     maxApplicants: draftData.maxApplicants || null,
     requirements: draftData.requirements || {},
@@ -103,14 +158,7 @@ async function updateDraft(draft, updateData) {
     throw error;
   }
 
-  // بنحدث بس الحقول المرسلة فعليًا (نفس فلسفة updateProfile بالبروفايل)
-const allowedFields = DRAFT_UPDATABLE_FIELDS;
-
-  allowedFields.forEach((field) => {
-    if (updateData[field] !== undefined) {
-      draft[field] = updateData[field];
-    }
-  });
+  applyDraftFields(draft, updateData);
 
   draft.version += 1;
   draft.lastSavedAt = new Date();
@@ -147,19 +195,7 @@ async function autoSaveDraft(draft, updateData, clientVersion) {
     throw error;
   }
 
-  const allowedFields = DRAFT_UPDATABLE_FIELDS;
-
-  allowedFields.forEach((field) => {
-    if (updateData[field] !== undefined) {
-      draft[field] = updateData[field];
-    }
-  });
-
-  allowedFields.forEach((field) => {
-    if (updateData[field] !== undefined) {
-      draft[field] = updateData[field];
-    }
-  });
+  applyDraftFields(draft, updateData);
 
   draft.version += 1;
   draft.lastSavedAt = new Date();

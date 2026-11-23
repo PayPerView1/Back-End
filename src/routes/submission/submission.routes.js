@@ -29,6 +29,8 @@ const submissionReviewController = require('../../controllers/submission/submiss
 const {
   campaignSubmissionsQuerySchema,
   reviewSubmissionBodySchema,
+  bulkApproveBodySchema,
+  bulkReviewBodySchema,
 } = require('../../validators/submission/submissionReview.validator');
 // ═══════════════════════════════════════════════════════════════
 // المسار أ: تجهيز التسليم
@@ -139,6 +141,22 @@ router.get(
     query: campaignSubmissionsQuerySchema,
   }),
   submissionReviewController.getCampaignSubmissions
+);
+
+router.post(
+  '/campaigns/:campaignId/submissions/bulk-approve',
+  protect,
+  requireBrandRole,
+  validate({ params: campaignIdParamSchema, body: bulkApproveBodySchema }),
+  submissionReviewController.bulkApproveSubmissions
+);
+
+router.post(
+  '/campaigns/:campaignId/submissions/bulk-review',
+  protect,
+  requireBrandRole,
+  validate({ params: campaignIdParamSchema, body: bulkReviewBodySchema }),
+  submissionReviewController.bulkReviewSubmissions
 );
 
 // ─────────────────────────────────────────────
