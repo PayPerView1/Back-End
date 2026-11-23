@@ -190,6 +190,32 @@ describe('createSubmission (B1)', () => {
     expect(await Submission.countDocuments({ creatorId: creator._id })).toBe(1);
   });
 
+  test('يسلسل إنشاءات متزامنة حتى لا يتجاوز المبدع الحد', async () => {
+    const { creator, campaign, application } = await setup({ maxSubmissionsPerCreator: 1 });
+    verifyPost.mockImplementation(({ url }) => {
+      const externalId = url.endsWith('one') ? 'concurrent-one' : 'concurrent-two';
+      return Promise.resolve(
+        okVerify(campaign, application, {
+          parsed: {
+            platform: 'TIKTOK',
+            canonicalUrl: url,
+            externalId,
+          },
+        })
+      );
+    });
+
+    const results = await Promise.allSettled([
+      createSubmission(creator._id, campaign._id, createBody({ url: 'https://example.com/one' })),
+      createSubmission(creator._id, campaign._id, createBody({ url: 'https://example.com/two' })),
+    ]);
+
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    const rejected = results.find((result) => result.status === 'rejected');
+    expect(rejected.reason.code).toBe('SUBMISSION_LIMIT_REACHED');
+    expect(await Submission.countDocuments({ creatorId: creator._id, campaignId: campaign._id })).toBe(1);
+  });
+
   test('يرفض المحتوى غير المطابق بـ CONTENT_REQUIREMENTS_NOT_MET + details', async () => {
     const { creator, campaign, application } = await setup();
     const blocking = { missingHashtags: ['#wafi'], missingKeywords: [], missingMentions: [], duration: null };

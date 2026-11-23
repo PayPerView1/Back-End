@@ -8,7 +8,7 @@ describe('socialMetadata', () => {
     expect(r.fetchStatus).toBe('OK');
     expect(r.caption).toHaveLength(5000);
     expect(r.durationSec).toBe(42);
-    expect(r.stats).toEqual({ views: 10, likes: null, comments: null, shares: null });
+    expect(r.stats).toEqual({ views: 10, likes: null, comments: null, shares: null, countryViews: [] });
     expect(r.fetchedAt).toBeTruthy();
   });
 
