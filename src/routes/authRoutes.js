@@ -21,22 +21,55 @@ const {
 
 // 1. استدعاء الـ Middleware للحماية
 const { protect } = require('../middlewares/authMiddleware');
+const { validate: validateRequest } = require('../middlewares/validate.middleware');
+const { createAuthRateLimiter } = require('../middlewares/authRateLimiter');
+const {
+  loginBodySchema,
+  emailBodySchema,
+  changePasswordBodySchema,
+  resetPasswordBodySchema,
+  tokenParamsSchema,
+} = require('../validators/auth.validator');
+
+const fifteenMinutes = 15 * 60 * 1000;
+const oneHour = 60 * 60 * 1000;
 
 // Public Routes (مسارات عامة)
 router.post(
   '/register',
+  createAuthRateLimiter({ windowMs: fifteenMinutes, limit: 5 }),
   uploadMiddleware,   // يتعامل مع رفع الملف إن وجد (req.file)
   registerRules, // يتأكد من صحة رقم الهاتف والدولة والمدينة
   validate,           // يرجع أخطاء الـ Validation إن وجدت
   register
 );
-router.get('/verify-email/:token', verifyEmail);
-router.post('/resend-verification', resendVerification);
-router.post('/login', login);
-router.post('/forgot-password', forgotPassword);
+router.get(
+  '/verify-email/:token',
+  validateRequest({ params: tokenParamsSchema }),
+  verifyEmail
+);
+router.post(
+  '/resend-verification',
+  createAuthRateLimiter({ windowMs: oneHour, limit: 3 }),
+  validateRequest({ body: emailBodySchema }),
+  resendVerification
+);
+router.post(
+  '/login',
+  createAuthRateLimiter({ windowMs: fifteenMinutes, limit: 10 }),
+  validateRequest({ body: loginBodySchema }),
+  login
+);
+router.post(
+  '/forgot-password',
+  createAuthRateLimiter({ windowMs: oneHour, limit: 3 }),
+  validateRequest({ body: emailBodySchema }),
+  forgotPassword
+);
 // 👈 مسار GET لعرض صفحة HTML لإعادة تعيين كلمة المرور
-router.get('/reset-password/:token', (req, res) => {
+router.get('/reset-password/:token', validateRequest({ params: tokenParamsSchema }), (req, res) => {
   const { token } = req.params;
+
   res.send(`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
@@ -108,10 +141,20 @@ router.get('/reset-password/:token', (req, res) => {
 });
 
 // مسار POST لمعالجة تحديث كلمة المرور فعلياً
-router.post('/reset-password/:token', resetPassword);
+router.post(
+  '/reset-password/:token',
+  createAuthRateLimiter({ windowMs: fifteenMinutes, limit: 10 }),
+  validateRequest({ params: tokenParamsSchema, body: resetPasswordBodySchema }),
+  resetPassword
+);
 
 // Protected Routes (مسارات تتطلب تسجيل الدخول وتوفير الـ JWT)
-router.patch('/change-password', protect, changePassword);
+router.patch(
+  '/change-password',
+  protect,
+  validateRequest({ body: changePasswordBodySchema }),
+  changePassword
+);
 router.patch('/interests', protect, updateInterests);
 router.post('/logout', protect, logout);
 
@@ -149,7 +192,7 @@ router.get(
     })(req, res, next);
   },
   (req, res) => {
-    const token = generateToken(req.user._id, req.user.role);
+    const token = generateToken(req.user._id, req.user.role, req.user.tokenVersion);
     res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}`);
   }
 );
