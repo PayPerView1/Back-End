@@ -5,9 +5,7 @@ const {
   CAMPAIGN_ACTION,
 } = require('../../constants/campaign.constants');
 const { logActivity } = require('./activityLog.service');
-
-// مهلة انتظار الطلب لخدمة الـ AI (بالميلي ثانية) قبل ما نعتبره فشل
-const AI_SERVICE_TIMEOUT_MS = 100000; // 100 ثواني
+const transport = require('../ai/aiServiceTransport');
 
 // ============================================
 // 4.1.2 — تجهيز البيانات المرسلة لخدمة الـ AI
@@ -17,11 +15,19 @@ const AI_SERVICE_TIMEOUT_MS = 100000; // 100 ثواني
  * @returns {Object} البيانات يلي رح تنرسل لخدمة الـ AI الخارجية
  */
 function buildReviewPayload(campaign) {
+  const declaration = campaign.halalDeclaration || {};
   return {
     campaignName: campaign.name,
     brief: campaign.brief,
     targetCountries: campaign.targetCountries,
-    halalDeclaration: campaign.halalDeclaration,
+    halalDeclaration: {
+      noGambling: Boolean(declaration.noGambling),
+      noSexualContent: Boolean(declaration.noSexualContent),
+      noExplicitMusic: Boolean(declaration.noExplicitMusic),
+      noAlcohol: Boolean(declaration.noAlcohol),
+      noSuspiciousCurrencies: Boolean(declaration.noSuspiciousCurrencies),
+      noUnrealisticProfit: Boolean(declaration.noUnrealisticProfit),
+    },
   };
 }
 
@@ -47,66 +53,38 @@ function mapAIResultToStatus(aiResult) {
   }
 }
 
-/**
- * بترجع نتيجة Mock (تجريبية) بدون أي استدعاء شبكة فعلي —
- * بتستخدم تلقائيًا لو AI_SERVICE_URL مش موجودة بـ .env (يعني الخدمة الحقيقية لسا مش جاهزة)
- */
-function getMockReviewResult() {
-  return {
-    result: AI_REVIEW_RESULT.APPROVED,
-    score: 95,
-    feedback: 'Mock approval — AI microservice not configured yet (AI_SERVICE_URL missing).',
-  };
-}
-
 // ============================================
 // 4.1.1 — الدالة الرئيسية: استدعاء خدمة الـ AI ومراجعة الحملة
 // ============================================
 /**
  * @param {Object} campaign - مستند الحملة
  * @returns {Promise<{result: string, score: number, feedback: string}>}
- * @throws {Error} لو خدمة الـ AI مُعدّة (AI_SERVICE_URL موجود) بس الاستدعاء فشل فعليًا
+ * @throws {Error} if the AI service is not configured or the request fails
  *   (المستدعي مسؤول يمسك هالخطأ ويستدعي handleAIServiceFailure عند اللزوم)
  */
 async function reviewCampaign(campaign) {
-  const aiServiceUrl = process.env.AI_SERVICE_URL;
-
-  // ما فيه رابط خدمة أصلاً → وضع Mock تلقائي (Task 4.1.5)
-  if (!aiServiceUrl) {
-    throw new Error('AI_SERVICE_URL is not configured');
-  }
-
   const payload = buildReviewPayload(campaign);
-
-  // AbortController لضبط مهلة انتظار، عشان ما نستنى إلى الأبد لو الخدمة واطية
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), AI_SERVICE_TIMEOUT_MS);
-
+  let data;
   try {
-    const response = await fetch(`${aiServiceUrl}/review`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
+    data = await transport.postJson('/review', payload, {
+      fallbackTimeoutMs: 100000,
+      timeoutEnvKey: 'AI_CAMPAIGN_REVIEW_TIMEOUT_MS',
     });
-
-    if (!response.ok) {
-      throw new Error(`AI service responded with status ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    return {
-      result: data.result,
-      score: data.score,
-      feedback: data.feedback,
-    };
   } catch (error) {
-    // منرمي خطأ موحد وواضح، بغض النظر شو كان سبب الفشل بالتفصيل (timeout، شبكة، رد غلط...)
-    throw new Error(`AI review service call failed: ${error.message}`);
-  } finally {
-    clearTimeout(timeoutId);
+    throw Object.assign(new Error('AI review service call failed'), {
+      code: error.code || 'AI_SERVICE_UNAVAILABLE',
+      status: error.status || error.upstreamStatus || null,
+    });
   }
+
+  const allowedResults = Object.values(AI_REVIEW_RESULT).filter((result) => result !== AI_REVIEW_RESULT.PENDING);
+  if (!allowedResults.includes(data.result) || !Number.isFinite(data.score) || data.score < 0 || data.score > 100 || typeof data.feedback !== 'string' || !data.feedback.trim()) {
+    throw Object.assign(new Error('AI service returned an invalid campaign review response'), {
+      code: 'AI_SERVICE_BAD_RESPONSE',
+    });
+  }
+
+  return { result: data.result, score: data.score, feedback: data.feedback };
 }
 
 // ============================================
@@ -141,5 +119,4 @@ module.exports = {
   buildReviewPayload,
   mapAIResultToStatus,
   handleAIServiceFailure,
-  getMockReviewResult,
 };

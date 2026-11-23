@@ -15,6 +15,9 @@ const { startDailyBudgetReset } = require('./src/jobs/dailyBudgetReset.job');
 const { startDormantWalletJob } = require('./src/jobs/dormantWallet.job');
 const { startSubmissionAutoApprove } = require('./src/jobs/submissionAutoApprove.job');
 const { startSubmissionProcessor } = require('./src/jobs/submissionProcessor.job');
+const { startSubmissionViews } = require('./src/jobs/submissionViews.job');
+const { startCreatorEarningsRelease } = require('./src/jobs/creatorEarnings.job');
+const { startAiPerformanceNotifications } = require('./src/jobs/aiPerformanceNotifications.job');
 // الاتصال بقاعدة البيانات قبل بدء الاستماع (الـ jobs تحتاج اتصالاً جاهزًا)
 const PORT = process.env.PORT || 5000;
 
@@ -37,6 +40,9 @@ const startServer = async () => {
     startDormantWalletJob();
     startSubmissionAutoApprove();
     startSubmissionProcessor();
+    startSubmissionViews();
+    startCreatorEarningsRelease();
+    startAiPerformanceNotifications();
   });
 };
 

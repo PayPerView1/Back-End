@@ -13,6 +13,8 @@ const User = require('../models/user');
 const Campaign = require('../models/campaign');
 const Application = require('../models/application');
 const CreatorPreferences = require('../models/creatorPreferences');
+const Favorite = require('../models/favorite');
+const aiIntelligence = require('../services/ai/aiIntelligence.client');
 const generateToken = require('../utils/generateTokens');
 
 jest.setTimeout(40000);
@@ -36,6 +38,8 @@ jest.mock('../services/wallet/paypal.service');
 let clipperUser, clipperToken;
 let brandUser, brandToken;
 let campaignSau, campaignEgy, campaignUgc;
+const originalAiServiceUrl = process.env.AI_SERVICE_URL;
+const originalAiServiceKey = process.env.AI_SERVICE_API_KEY;
 
 beforeAll(async () => {
   await db.connect();
@@ -43,11 +47,17 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await db.disconnect();
+  if (originalAiServiceUrl === undefined) delete process.env.AI_SERVICE_URL;
+  else process.env.AI_SERVICE_URL = originalAiServiceUrl;
+  if (originalAiServiceKey === undefined) delete process.env.AI_SERVICE_API_KEY;
+  else process.env.AI_SERVICE_API_KEY = originalAiServiceKey;
 });
 
 beforeEach(async () => {
   await db.clearDatabase();
   jest.clearAllMocks();
+  process.env.AI_SERVICE_URL = '';
+  process.env.AI_SERVICE_API_KEY = '';
 
   clipperUser = await User.create({
     fullName: 'Test Clipper',
@@ -189,6 +199,50 @@ describe('GET /api/v1/campaigns/recommendations', () => {
     const codes = saudiClipping.reasons.map((r) => r.code);
     expect(codes).toContain('COUNTRY_MATCH');
     expect(codes).toContain('CONTENT_TYPE_MATCH');
+  });
+
+  it('uses shared application and favorite activity as collaborative evidence', async () => {
+    const peer = await User.create({ fullName: 'Peer Creator', email: 'peer@test.com', password: 'password123', role: 'CLIPPER' });
+    await Favorite.create({ creatorId: clipperUser._id, campaignId: campaignSau._id });
+    await Favorite.create({ creatorId: peer._id, campaignId: campaignSau._id });
+    await Favorite.create({ creatorId: peer._id, campaignId: campaignUgc._id });
+
+    const res = await request(app)
+      .get('/api/v1/campaigns/recommendations?limit=10')
+      .set('Authorization', `Bearer ${clipperToken}`);
+
+    expect(res.statusCode).toBe(200);
+    const ugc = res.body.data.find((campaign) => campaign.id === campaignUgc._id.toString());
+    expect(ugc.reasons.map((reason) => reason.code)).toContain('SIMILAR_CREATORS_INTERACTED');
+  });
+
+  it('uses AI embedding ranks when configured and keeps the database scorer as fallback', async () => {
+    await CreatorPreferences.create({ creatorId: clipperUser._id, preferredContentTypes: ['UGC'] });
+    const previousUrl = process.env.AI_SERVICE_URL;
+    const previousKey = process.env.AI_SERVICE_API_KEY;
+    process.env.AI_SERVICE_URL = 'http://ai-service.test';
+    process.env.AI_SERVICE_API_KEY = 'unit-test-key';
+    const rank = jest.spyOn(aiIntelligence, 'rankRecommendations').mockResolvedValue({
+      status: 'AVAILABLE', method: 'content_based_and_collaborative', data: [
+        { campaignId: campaignEgy._id.toString(), score: 0.9, reasons: ['CONTENT_SIMILARITY'] },
+      ],
+    });
+    try {
+      const res = await request(app)
+        .get('/api/v1/campaigns/recommendations?limit=10')
+        .set('Authorization', `Bearer ${clipperToken}`);
+
+      expect(res.statusCode).toBe(200);
+      const egypt = res.body.data.find((campaign) => campaign.id === campaignEgy._id.toString());
+      expect(egypt.reasons.map((reason) => reason.code)).toContain('CONTENT_SIMILARITY');
+      expect(rank).toHaveBeenCalledTimes(1);
+    } finally {
+      rank.mockRestore();
+      if (previousUrl === undefined) delete process.env.AI_SERVICE_URL;
+      else process.env.AI_SERVICE_URL = previousUrl;
+      if (previousKey === undefined) delete process.env.AI_SERVICE_API_KEY;
+      else process.env.AI_SERVICE_API_KEY = previousKey;
+    }
   });
 
   it('✅ يستثني الحملات التي قدّم عليها المبدع', async () => {

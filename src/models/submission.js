@@ -27,6 +27,10 @@ const statsSchema = new mongoose.Schema(
     likes:    { type: Number, default: null, min: 0 },
     comments: { type: Number, default: null, min: 0 },
     shares:   { type: Number, default: null, min: 0 },
+    countryViews: {
+      type: [{ countryCode: { type: String, uppercase: true, trim: true }, views: { type: Number, min: 0 } }],
+      default: undefined,
+    },
   },
   { _id: false }
 );
@@ -224,6 +228,14 @@ const submissionSchema = new mongoose.Schema(
       lockedAt: { type: Date, default: null },
     },
 
+    viewTrackingMilestonesNotified: { type: [Number], default: [] },
+    viewTrackingPolledAt: { type: Date, default: null },
+    viewTrackingHighWaterViews: { type: Number, default: null, min: 0 },
+    viewTrackingHighWaterCountryViews: {
+      type: [{ countryCode: { type: String, uppercase: true, trim: true }, views: { type: Number, min: 0 } }],
+      default: [],
+    },
+
     linkHistory: { type: [linkHistorySchema], default: [] },
 
     // الطوابع الزمنية
@@ -283,6 +295,7 @@ submissionSchema.index({ status: 1, 'aiReview.status': 1, 'processing.lockedAt':
 submissionSchema.index({ status: 1, 'advertiserReview.status': 1, reviewDeadlineAt: 1 });
 // طابور المراجعة اليدوية
 submissionSchema.index({ status: 1, 'adminReview.queuedAt': 1 });
+submissionSchema.index({ status: 1, viewTrackingPolledAt: 1, approvedAt: 1 });
 
 module.exports = mongoose.model('Submission', submissionSchema);
 module.exports.buildSubmissionCode = buildSubmissionCode;
