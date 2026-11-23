@@ -9,16 +9,12 @@
 // وضع التطوير: AI_MOCK=true (لا يتصل بالشبكة)
 //   AI_MOCK_RESULT = APPROVED (افتراضي) | REJECTED | MANUAL_REVIEW_REQUIRED
 //   AI_MOCK_DELAY_MS (افتراضي 2000) لتظهر حالة "قيد الفحص" في الواجهة
-const axios = require('axios');
 const { AI_REVIEW_RESULT } = require('../../constants/campaign.constants');
 const { CHECK_STATUS, CHECK_SOURCE, CHECK_CODE } = require('../../constants/submission.constants');
 const { extractHashtags, extractMentions } = require('../../utils/submission/hashtag.utils');
+const transport = require('./aiServiceTransport');
 
 const REVIEW_PATH = '/api/v1/ai/submissions/review';
-const DEFAULT_AI_URL = 'https://payperview-ai.onrender.com'; // نفس افتراضي aiChatbotClient
-
-const getBaseUrl = () => process.env.AI_SERVICE_URL || DEFAULT_AI_URL;
-const getTimeoutMs = () => Number(process.env.AI_REVIEW_TIMEOUT_MS) || 90000;
 
 const makeError = (code, message, extra = {}) => {
   const error = new Error(message);
@@ -27,26 +23,34 @@ const makeError = (code, message, extra = {}) => {
   return error;
 };
 
-const clampScore = (value) => {
-  const n = Number(value);
-  return Number.isFinite(n) && value !== null && value !== '' ? Math.min(100, Math.max(0, Math.round(n))) : null;
-};
+const clampScore = (value) => Math.min(100, Math.max(0, Math.round(value)));
 
 const text = (value, max) => (typeof value === 'string' ? value.slice(0, max) : '');
 
 const sanitizeCheck = (raw) => {
-  if (!raw || typeof raw.code !== 'string') return null;
+  if (!raw || typeof raw !== 'object' || typeof raw.code !== 'string') {
+    throw makeError('AI_INVALID_RESPONSE', 'AI response contains an invalid check');
+  }
   const code = raw.code.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_').slice(0, 50);
-  if (code.length < 2) return null;
+  if (code.length < 2 || typeof raw.message !== 'string') {
+    throw makeError('AI_INVALID_RESPONSE', 'AI response contains an invalid check');
+  }
 
   const status = String(raw.status || '').toUpperCase();
+  if (!Object.values(CHECK_STATUS).includes(status)) {
+    throw makeError('AI_INVALID_RESPONSE', 'AI response contains an invalid check status');
+  }
+  if (raw.score !== null && raw.score !== undefined &&
+      (typeof raw.score !== 'number' || !Number.isFinite(raw.score) || raw.score < 0 || raw.score > 100)) {
+    throw makeError('AI_INVALID_RESPONSE', 'AI response contains an invalid check score');
+  }
   return {
     code,
     source: CHECK_SOURCE.AI,
-    status: Object.values(CHECK_STATUS).includes(status) ? status : CHECK_STATUS.NEEDS_REVIEW,
+    status,
     message: text(raw.message, 500),
     fixHint: text(raw.fixHint, 500),
-    score: clampScore(raw.score),
+    score: raw.score === null || raw.score === undefined ? null : clampScore(raw.score),
     meta: null,
   };
 };
@@ -67,12 +71,19 @@ const normalizeAiResponse = (raw) => {
     throw makeError('AI_INVALID_RESPONSE', `Unknown AI result: ${String(raw.result)}`);
   }
 
-  const checks = (Array.isArray(raw.checks) ? raw.checks : []).map(sanitizeCheck).filter(Boolean).slice(0, 30);
+  if (typeof raw.feedback !== 'string' || !raw.feedback.trim() || !Array.isArray(raw.checks)) {
+    throw makeError('AI_INVALID_RESPONSE', 'AI response is missing required fields');
+  }
+  if (raw.score !== null && raw.score !== undefined &&
+      (typeof raw.score !== 'number' || !Number.isFinite(raw.score) || raw.score < 0 || raw.score > 100)) {
+    throw makeError('AI_INVALID_RESPONSE', 'AI response contains an invalid score');
+  }
+  const checks = raw.checks.map(sanitizeCheck).slice(0, 30);
 
   return {
     result,
-    score: clampScore(raw.score),
-    feedback: typeof raw.feedback === 'string' ? raw.feedback.slice(0, 1000) : null,
+    score: raw.score === null || raw.score === undefined ? null : clampScore(raw.score),
+    feedback: raw.feedback.trim().slice(0, 1000),
     checks,
     manualReasonCode:
       result === AI_REVIEW_RESULT.MANUAL_REVIEW_REQUIRED
@@ -187,25 +198,29 @@ const mockReview = async () => {
 // الاستدعاء الفعلي
 // ----------------------
 const reviewSubmission = async (payload) => {
-  if (process.env.AI_MOCK === 'true') return mockReview(payload);
+  if (process.env.AI_MOCK === 'true') {
+    if (process.env.NODE_ENV === 'production') {
+      throw makeError('AI_CONFIGURATION_ERROR', 'AI_MOCK cannot be enabled in production');
+    }
+    return mockReview(payload);
+  }
 
-  const apiKey = process.env.AI_SERVICE_API_KEY;
-  let response;
+  let responseData;
   try {
-    response = await axios.post(`${getBaseUrl()}${REVIEW_PATH}`, payload, {
-      timeout: getTimeoutMs(),
-      headers: { 'Content-Type': 'application/json', ...(apiKey ? { 'X-Service-Key': apiKey } : {}) },
+    responseData = await transport.postJson(REVIEW_PATH, payload, {
+      fallbackTimeoutMs: 90000,
+      timeoutEnvKey: 'AI_REVIEW_TIMEOUT_MS',
     });
   } catch (error) {
-    const status = error.response ? error.response.status : null;
+    const status = error.status || error.upstreamStatus || null;
     throw makeError(
       'AI_REQUEST_FAILED',
-      `AI review request failed: ${status ? `HTTP ${status}` : error.message}`,
+      `AI review request failed${status ? ` (HTTP ${status})` : ''}`,
       { status }
     );
   }
 
-  return normalizeAiResponse(response.data);
+  return normalizeAiResponse(responseData);
 };
 
 module.exports = { buildReviewPayload, reviewSubmission, normalizeAiResponse };

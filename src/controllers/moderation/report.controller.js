@@ -1,6 +1,38 @@
 // src/controllers/moderation/report.controller.js
 const { AppError, sendError } = require('../../utils/errors');
 const reportService = require('../../services/moderation/report.service');
+const Report = require('../../models/report');
+const reportAIService = require('../../services/moderation/reportAI.service');
+
+const getOwnedCampaignReportSummary = async (req, res) => {
+  try {
+    const grouped = await Report.aggregate([
+      { $match: { campaignId: req.campaign._id, isConfirmed: true } },
+      { $group: { _id: { status: '$status', reason: '$reason' }, count: { $sum: 1 } } },
+    ]);
+    const statusCounts = {};
+    const reasonCounts = {};
+    let totalReports = 0;
+    for (const row of grouped) {
+      const count = Number(row.count) || 0;
+      totalReports += count;
+      statusCounts[row._id.status] = (statusCounts[row._id.status] || 0) + count;
+      reasonCounts[row._id.reason] = (reasonCounts[row._id.reason] || 0) + count;
+    }
+    return res.status(200).json({ success: true, data: { campaignId: String(req.campaign._id), totalReports, statusCounts, reasonCounts } });
+  } catch (error) {
+    return sendError(res, error, 'report.controller.getOwnedCampaignReportSummary');
+  }
+};
+
+const triageReportWithAI = async (req, res) => {
+  try {
+    const data = await reportAIService.triageReport(req.params.id);
+    return res.status(200).json({ success: true, data });
+  } catch (error) {
+    return sendError(res, error, 'report.controller.triageReportWithAI');
+  }
+};
 
 /**
  * POST /api/v1/campaigns/:campaignId/report
@@ -133,6 +165,8 @@ const reviewReport = async (req, res) => {
 
 module.exports = {
   submitReport,
+  getOwnedCampaignReportSummary,
+  triageReportWithAI,
   confirmVisitorReport,
   getReportStatistics,
   getReports,

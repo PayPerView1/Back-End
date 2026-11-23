@@ -56,6 +56,15 @@ router.delete(
 
 // Advertiser side
 router.get(
+  '/campaigns/:campaignId/applications/ai-ranking',
+  protect,
+  requireBrandRole,
+  applicationValidator.validateCampaignIdParam,
+  applicationValidator.validate,
+  applicationController.getCampaignApplicantRanking
+);
+
+router.get(
   '/campaigns/:campaignId/applications',
   protect,
   requireBrandRole,

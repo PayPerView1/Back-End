@@ -1,6 +1,7 @@
 // src/controllers/application/application.controller.js
 const { AppError, sendError } = require('../../utils/errors');
 const applicationService = require('../../services/application/application.service');
+const applicantRankingService = require('../../services/application/applicantRanking.service');
 
 // ============================================
 // POST /api/v1/campaigns/:campaignId/apply
@@ -101,6 +102,16 @@ const getCampaignApplications = async (req, res) => {
   }
 };
 
+const getCampaignApplicantRanking = async (req, res) => {
+  try {
+    const { campaignId } = req.validated?.params || req.params;
+    const data = await applicantRankingService.getCampaignApplicantRanking(campaignId, req.user._id);
+    return res.status(200).json({ success: true, data });
+  } catch (error) {
+    return sendError(res, error, 'application.getCampaignApplicantRanking');
+  }
+};
+
 const updateApplicationStatus = async (req, res) => {
   try {
     const { id } = req.params;
@@ -124,5 +135,6 @@ module.exports = {
   myApplications,
   getMaterials,
   getCampaignApplications,
+  getCampaignApplicantRanking,
   updateApplicationStatus,
 };

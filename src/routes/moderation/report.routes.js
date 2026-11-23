@@ -11,6 +11,7 @@ const adminOnly = require('../../middlewares/adminOnly');
 const { reportRateLimiter } = require('../../middlewares/moderation/reportRateLimiter');
 const reportController = require('../../controllers/moderation/report.controller');
 const reportValidator = require('../../validators/moderation/report.validator');
+const { requireBrandRole, verifyCampaignOwnership } = require('../../middlewares/campaign/campaignValidationMiddleware');
 
 // POST /api/v1/campaigns/:campaignId/report
 router.post(
@@ -21,6 +22,15 @@ router.post(
   reportValidator.validateSubmitReport,
   reportValidator.validate,
   reportController.submitReport
+);
+
+// Aggregate only: campaign owners do not receive reporter identities or report details.
+router.get(
+  '/campaigns/:campaignId/report-summary',
+  protect,
+  requireBrandRole,
+  verifyCampaignOwnership,
+  reportController.getOwnedCampaignReportSummary
 );
 
 // POST /api/v1/reports/confirm
@@ -57,6 +67,15 @@ router.get(
   reportValidator.validateReportIdParam,
   reportValidator.validate,
   reportController.getReportById
+);
+
+router.post(
+  '/reports/:id/ai-triage',
+  protect,
+  adminOnly,
+  reportValidator.validateReportIdParam,
+  reportValidator.validate,
+  reportController.triageReportWithAI
 );
 
 // PUT /api/v1/reports/:id
