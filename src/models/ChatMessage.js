@@ -1,6 +1,12 @@
 // src/models/ChatMessage.js
 const mongoose = require('mongoose');
 
+const feedbackSchema = new mongoose.Schema({
+  rating: { type: String, enum: ['HELPFUL', 'NOT_HELPFUL'], required: true },
+  comment: { type: String, default: '', maxlength: 1000 },
+  submittedAt: { type: Date, default: Date.now },
+}, { _id: false });
+
 const chatMessageSchema = new mongoose.Schema({
   thread_id: {
     type: mongoose.Schema.Types.ObjectId,
@@ -26,6 +32,7 @@ const chatMessageSchema = new mongoose.Schema({
     of: mongoose.Schema.Types.Mixed,
     default: {},
   },
+  feedback: { type: feedbackSchema, default: null },
 }, {
   timestamps: { createdAt: 'created_at' }
 });
