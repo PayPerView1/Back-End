@@ -27,6 +27,8 @@ jest.mock('../services/submission/submission.service', () => ({
 jest.mock('../services/submission/submissionReview.service', () => ({
   getCampaignSubmissions: jest.fn(),
   reviewSubmission: jest.fn(),
+  bulkApproveSubmissions: jest.fn(),
+  bulkReviewSubmissions: jest.fn(),
   getManualReviewQueue: jest.fn(),
   decideManualReview: jest.fn(),
   autoApproveDueSubmissions: jest.fn(),
@@ -79,6 +81,7 @@ beforeEach(() => {
 
   submissionReviewService.getCampaignSubmissions.mockResolvedValue({ data: [], pagination: pageMeta });
   submissionReviewService.reviewSubmission.mockResolvedValue({ id: 'sub-1', status: 'APPROVED' });
+  submissionReviewService.bulkApproveSubmissions.mockResolvedValue({ approvedCount: 1, submissionIds: ['sub-1'] });
   submissionReviewService.getManualReviewQueue.mockResolvedValue({ data: [], pagination: pageMeta });
   submissionReviewService.decideManualReview.mockResolvedValue({ id: 'sub-1', status: 'UNDER_REVIEW' });
 });
@@ -285,6 +288,18 @@ describe('التحقق من المدخلات', () => {
     expect(res.body.errors.map((e) => e.field)).toContain('note');
   });
 
+  test('مراجعة المعلن REQUEST_EDITS بدون note: 400', async () => {
+    const { brand } = await setupUsers();
+
+    const res = await request(app)
+      .put(`${API}/submissions/${objectId()}/review`)
+      .set(f.authHeader(brand))
+      .send({ decision: 'REQUEST_EDITS' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('VALIDATION_ERROR');
+  });
+
   test('مراجعة الأدمن REJECT بدون note: 400', async () => {
     const { admin } = await setupUsers();
 
@@ -458,6 +473,57 @@ describe('مسارات المراجعة', () => {
       decision: 'APPROVE',
       note: 'ممتاز',
     });
+  });
+
+  test('POST /campaigns/:id/submissions/bulk-approve: 200', async () => {
+    const { brand } = await setupUsers();
+    const campaignId = objectId();
+    const submissionIds = [objectId(), objectId()];
+
+    const res = await request(app)
+      .post(`${API}/campaigns/${campaignId}/submissions/bulk-approve`)
+      .set(f.authHeader(brand))
+      .send({ submissionIds });
+
+    expect(res.status).toBe(200);
+    expect(submissionReviewService.bulkApproveSubmissions).toHaveBeenCalledWith(
+      campaignId,
+      expect.anything(),
+      submissionIds
+    );
+  });
+
+  test('bulk approval rejects duplicated ids at the request boundary', async () => {
+    const { brand } = await setupUsers();
+    const campaignId = objectId();
+    const id = objectId();
+
+    const res = await request(app)
+      .post(`${API}/campaigns/${campaignId}/submissions/bulk-approve`)
+      .set(f.authHeader(brand))
+      .send({ submissionIds: [id, id] });
+
+    expect(res.status).toBe(400);
+    expect(submissionReviewService.bulkApproveSubmissions).not.toHaveBeenCalled();
+  });
+
+  test('bulk review validates and forwards advertiser rejection reasons', async () => {
+    const { brand } = await setupUsers();
+    const campaignId = objectId();
+    const submissionIds = [objectId()];
+    submissionReviewService.bulkReviewSubmissions.mockResolvedValue({ rejectedCount: 1 });
+
+    const res = await request(app)
+      .post(`${API}/campaigns/${campaignId}/submissions/bulk-review`)
+      .set(f.authHeader(brand))
+      .send({ submissionIds, decision: 'REJECT', note: 'Needs changes' });
+
+    expect(res.status).toBe(200);
+    expect(submissionReviewService.bulkReviewSubmissions).toHaveBeenCalledWith(
+      campaignId,
+      expect.anything(),
+      { submissionIds, decision: 'REJECT', note: 'Needs changes' }
+    );
   });
 
   test('PUT /admin/submissions/:id/review: 200', async () => {

@@ -115,6 +115,19 @@ const notifyCreatorRejected = safe('notifyCreatorRejected', async (submission, c
   );
 });
 
+const notifyCreatorEditsRequested = safe(
+  'notifyCreatorEditsRequested',
+  async (submission, campaign, { note } = {}) =>
+    notifyUser(
+      submission.creatorId,
+      buildNotification(
+        NOTIFICATION_TYPE.SUBMISSION_EDITS_REQUESTED,
+        { campaignName: campaign.name, note },
+        ids(submission, campaign)
+      )
+    )
+);
+
 const notifyDownloadResult = safe('notifyDownloadResult', async (log, campaign, outcome) => {
   const type =
     outcome === 'COMPLETED' ? NOTIFICATION_TYPE.DOWNLOAD_COMPLETED : NOTIFICATION_TYPE.DOWNLOAD_FAILED;
@@ -136,5 +149,6 @@ module.exports = {
   notifyAdminsManualReview,
   notifyCreatorApproved,
   notifyCreatorRejected,
+  notifyCreatorEditsRequested,
   notifyDownloadResult,
 };

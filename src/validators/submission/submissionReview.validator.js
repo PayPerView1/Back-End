@@ -37,6 +37,7 @@ const campaignSubmissionsQuerySchema = Joi.object({
       'AWAITING_ADVERTISER',
       'APPROVED',
       'REJECTED',
+      'CHANGES_REQUESTED',
       'AI_REJECTED',
       'WITHDRAWN'
     )
@@ -50,20 +51,20 @@ const campaignSubmissionsQuerySchema = Joi.object({
 // ============================================
 const reviewSubmissionBodySchema = Joi.object({
   decision: Joi.string()
-    .valid('APPROVE', 'REJECT')
+    .valid('APPROVE', 'REJECT', 'REQUEST_EDITS')
     .required()
     .messages({
-      'any.only': 'Decision must be APPROVE or REJECT',
+      'any.only': 'Decision must be APPROVE, REJECT, or REQUEST_EDITS',
       'any.required': 'Decision is required',
     }),
   note: Joi.string()
     .trim()
     .max(1000)
     .when('decision', {
-      is: 'REJECT',
+      is: Joi.valid('REJECT', 'REQUEST_EDITS'),
       then: Joi.required().messages({
-        'any.required': 'Rejection note is required',
-        'string.empty': 'Rejection note cannot be empty',
+        'any.required': 'Review note is required',
+        'string.empty': 'Review note cannot be empty',
       }),
       otherwise: Joi.optional().allow('', null),
     })
@@ -71,6 +72,28 @@ const reviewSubmissionBodySchema = Joi.object({
       'string.max': 'Note cannot exceed 1000 characters',
     }),
 });
+
+const bulkApproveBodySchema = Joi.object({
+  submissionIds: Joi.array()
+    .items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/).required())
+    .min(1)
+    .unique()
+    .required(),
+}).unknown(false);
+
+const bulkReviewBodySchema = Joi.object({
+  submissionIds: Joi.array()
+    .items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/).required())
+    .min(1)
+    .unique()
+    .required(),
+  decision: Joi.string().valid('APPROVE', 'REJECT').required(),
+  note: Joi.string().trim().max(1000).when('decision', {
+    is: 'REJECT',
+    then: Joi.string().trim().min(1).max(1000).required(),
+    otherwise: Joi.string().trim().max(1000).allow('').optional(),
+  }),
+}).unknown(false);
 
 // ============================================
 // GET /admin/submissions/manual-review — admin
@@ -108,6 +131,8 @@ module.exports = {
   submissionIdParamSchema,
   campaignSubmissionsQuerySchema,
   reviewSubmissionBodySchema,
+  bulkApproveBodySchema,
+  bulkReviewBodySchema,
   manualReviewQueueQuerySchema,
   adminReviewBodySchema,
 };

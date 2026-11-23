@@ -28,6 +28,7 @@ const notificationSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: {},
     },
+    dedupeKey: { type: String, default: undefined, maxlength: 200 },
 
     isRead: { type: Boolean, default: false },
     readAt: { type: Date, default: null },
@@ -43,6 +44,7 @@ const notificationSchema = new mongoose.Schema(
 // ----------------------
 // قائمة إشعارات المستخدم + عدّاد غير المقروء
 notificationSchema.index({ userId: 1, isRead: 1, createdAt: -1 });
+notificationSchema.index({ userId: 1, dedupeKey: 1 }, { unique: true, partialFilterExpression: { dedupeKey: { $type: 'string' } } });
 // حذف تلقائي بعد 90 يوماً
 notificationSchema.index(
   { createdAt: 1 },

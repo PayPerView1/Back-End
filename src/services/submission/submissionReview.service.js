@@ -20,6 +20,7 @@ const { toListItem, toDetail } = require('../../utils/submission/submissionDto.u
 const {
   notifyCreatorApproved,
   notifyCreatorRejected,
+  notifyCreatorEditsRequested,
   notifyBrandNewSubmission,
 } = require('./submissionNotifications.service');
 
@@ -79,6 +80,13 @@ const displayStatusToFilter = (displayStatus) => {
       return {
         status: SUBMISSION_STATUS.REJECTED,
         rejectedBy: { $in: [REJECTED_BY.ADVERTISER, REJECTED_BY.ADMIN] },
+        'advertiserReview.status': { $ne: ADVERTISER_STATUS.CHANGES_REQUESTED },
+      };
+    case DISPLAY_STATUS.CHANGES_REQUESTED:
+      return {
+        status: SUBMISSION_STATUS.REJECTED,
+        rejectedBy: REJECTED_BY.ADVERTISER,
+        'advertiserReview.status': ADVERTISER_STATUS.CHANGES_REQUESTED,
       };
     case DISPLAY_STATUS.WITHDRAWN:
       return { status: SUBMISSION_STATUS.WITHDRAWN };
@@ -189,122 +197,213 @@ const reviewSubmission = async (submissionId, advertiserId, { decision, note }) 
     throw new AppError('Submission not found', 'NOT_FOUND');
   }
 
-  const submission = await Submission.findById(submissionId).populate('campaignId');
-  if (!submission) {
-    throw new AppError('Submission not found', 'NOT_FOUND');
-  }
-
-  const campaign = submission.campaignId;
-  if (!campaign) {
-    throw new AppError('Campaign not found', 'NOT_FOUND');
-  }
-
-  if (campaign.advertiserId.toString() !== advertiserId.toString()) {
-    throw new AppError('You are not authorized to review this submission', 'FORBIDDEN');
-  }
-
-  if (campaign.isSuspended === true) {
-    throw new AppError('This campaign is currently suspended', 'CAMPAIGN_SUSPENDED');
-  }
-
-  // يجب أن تكون AWAITING_ADVERTISER
-  const displayStatus = getDisplayStatus(submission);
-  if (displayStatus !== DISPLAY_STATUS.AWAITING_ADVERTISER) {
-    throw new AppError('Submission is not awaiting your review', 'SUBMISSION_ALREADY_REVIEWED');
-  }
-
   const now = new Date();
-
-  if (decision === 'APPROVE') {
-    const updated = await Submission.findOneAndUpdate(
-      {
-        _id: submission._id,
-        status: SUBMISSION_STATUS.UNDER_REVIEW,
-        'advertiserReview.status': ADVERTISER_STATUS.PENDING,
-      },
-      {
-        $set: {
-          status: SUBMISSION_STATUS.APPROVED,
-          reviewedAt: now,
-          approvedAt: now,
-          'advertiserReview.status': ADVERTISER_STATUS.APPROVED,
-          'advertiserReview.reviewedAt': now,
-          'advertiserReview.reviewedBy': advertiserId,
-          'advertiserReview.note': note || null,
-        },
-      },
-      { new: true }
-    );
-
-    if (!updated) {
-      throw new AppError('Submission is not awaiting your review', 'SUBMISSION_ALREADY_REVIEWED');
-    }
-
-    await Campaign.updateOne(
-      { _id: campaign._id },
-      { $inc: { 'stats.totalApprovedVideos': 1 } }
-    );
-
-    // إشعار (بعد commit)
-    try {
-      await notifyCreatorApproved(
-        toNotificationPayload(submission),
-        toNotificationCampaign(campaign),
-        { auto: false }
-      );
-    } catch (err) {
-      console.error('[submissionReview.service] notify approved failed:', err.message);
-    }
-
-    return {
-      id: updated._id,
-      status: updated.status,
-      displayStatus: DISPLAY_STATUS.APPROVED,
-      reviewedAt: now,
-    };
-  }
-
-  // REJECT
-  const updated = await Submission.findOneAndUpdate(
-    {
-      _id: submission._id,
-      status: SUBMISSION_STATUS.UNDER_REVIEW,
-      'advertiserReview.status': ADVERTISER_STATUS.PENDING,
-    },
-    {
-      $set: {
-        status: SUBMISSION_STATUS.REJECTED,
-        rejectedBy: REJECTED_BY.ADVERTISER,
-        reviewedAt: now,
-        linkLocked: false,
-        'advertiserReview.status': ADVERTISER_STATUS.REJECTED,
-        'advertiserReview.reviewedAt': now,
-        'advertiserReview.reviewedBy': advertiserId,
-        'advertiserReview.note': note,
-      },
-    },
-    { new: true }
-  );
-
-  if (!updated) {
-    throw new AppError('Submission is not awaiting your review', 'SUBMISSION_ALREADY_REVIEWED');
-  }
+  const session = await mongoose.startSession();
+  let submission;
+  let campaign;
+  let updated;
 
   try {
-    await notifyCreatorRejected(
-      toNotificationPayload(submission),
-      toNotificationCampaign(campaign),
-      { note }
-    );
-  } catch (err) {
-    console.error('[submissionReview.service] notify rejected failed:', err.message);
+    await session.withTransaction(async () => {
+      submission = await Submission.findById(submissionId).session(session);
+      if (!submission) throw new AppError('Submission not found', 'NOT_FOUND');
+
+      campaign = await Campaign.findById(submission.campaignId).session(session);
+      if (!campaign) throw new AppError('Campaign not found', 'NOT_FOUND');
+      if (campaign.advertiserId.toString() !== advertiserId.toString()) {
+        throw new AppError('You are not authorized to review this submission', 'FORBIDDEN');
+      }
+      if (campaign.isSuspended === true) {
+        throw new AppError('This campaign is currently suspended', 'CAMPAIGN_SUSPENDED');
+      }
+      if (getDisplayStatus(submission) !== DISPLAY_STATUS.AWAITING_ADVERTISER) {
+        throw new AppError('Submission is not awaiting your review', 'SUBMISSION_ALREADY_REVIEWED');
+      }
+
+      const isApprove = decision === 'APPROVE';
+      const requestsEdits = decision === 'REQUEST_EDITS';
+      const advertiserStatus = isApprove
+        ? ADVERTISER_STATUS.APPROVED
+        : requestsEdits
+          ? ADVERTISER_STATUS.CHANGES_REQUESTED
+          : ADVERTISER_STATUS.REJECTED;
+
+      const reviewUpdate = {
+        $set: {
+          status: isApprove ? SUBMISSION_STATUS.APPROVED : SUBMISSION_STATUS.REJECTED,
+          rejectedBy: isApprove ? null : REJECTED_BY.ADVERTISER,
+          reviewedAt: now,
+          approvedAt: isApprove ? now : null,
+          linkLocked: isApprove,
+          'advertiserReview.status': advertiserStatus,
+          'advertiserReview.reviewedAt': now,
+          'advertiserReview.reviewedBy': advertiserId,
+          'advertiserReview.note': note || '',
+        },
+      };
+      if (!isApprove && note) {
+        reviewUpdate.$push = {
+          rejectionReasons: {
+            code: requestsEdits ? 'EDITS_REQUESTED' : 'ADVERTISER_REJECTION',
+            message: note,
+          },
+        };
+      }
+
+      updated = await Submission.findOneAndUpdate(
+        {
+          _id: submission._id,
+          status: SUBMISSION_STATUS.UNDER_REVIEW,
+          'advertiserReview.status': ADVERTISER_STATUS.PENDING,
+        },
+        reviewUpdate,
+        { new: true, session }
+      );
+
+      if (!updated) {
+        throw new AppError('Submission is not awaiting your review', 'SUBMISSION_ALREADY_REVIEWED');
+      }
+
+      if (isApprove) {
+        await Campaign.updateOne(
+          { _id: campaign._id },
+          { $inc: { 'stats.totalApprovedVideos': 1 } },
+          { session }
+        );
+      }
+    });
+  } finally {
+    await session.endSession();
+  }
+
+  const submissionPayload = toNotificationPayload(submission);
+  const campaignPayload = toNotificationCampaign(campaign);
+  if (decision === 'APPROVE') {
+    await notifyCreatorApproved(submissionPayload, campaignPayload, { auto: false });
+  } else if (decision === 'REQUEST_EDITS') {
+    await notifyCreatorEditsRequested(submissionPayload, campaignPayload, { note });
+  } else {
+    await notifyCreatorRejected(submissionPayload, campaignPayload, { note });
   }
 
   return {
     id: updated._id,
     status: updated.status,
-    displayStatus: DISPLAY_STATUS.REJECTED,
+    displayStatus: getDisplayStatus(updated),
     reviewedAt: now,
+  };
+};
+
+const bulkReviewSubmissions = async (campaignId, advertiserId, { submissionIds, decision, note = '' }) => {
+  if (!isValidId(campaignId) || !Array.isArray(submissionIds) || submissionIds.length === 0) {
+    throw new AppError('Invalid campaign or submission identifiers', 'VALIDATION_ERROR');
+  }
+  if (!['APPROVE', 'REJECT'].includes(decision)) {
+    throw new AppError('Bulk review decision must be APPROVE or REJECT', 'VALIDATION_ERROR');
+  }
+  if (decision === 'REJECT' && !String(note).trim()) {
+    throw new AppError('A review note is required when rejecting submissions', 'VALIDATION_ERROR');
+  }
+  if (submissionIds.some((id) => !isValidId(id)) || new Set(submissionIds.map(String)).size !== submissionIds.length) {
+    throw new AppError('Submission identifiers must be valid and unique', 'VALIDATION_ERROR');
+  }
+
+  const now = new Date();
+  const session = await mongoose.startSession();
+  let campaign;
+  let reviewed = [];
+  try {
+    await session.withTransaction(async () => {
+      reviewed = [];
+      campaign = await Campaign.findById(campaignId).session(session);
+      if (!campaign) throw new AppError('Campaign not found', 'NOT_FOUND');
+      if (campaign.advertiserId.toString() !== advertiserId.toString()) {
+        throw new AppError('You are not authorized to review this campaign', 'FORBIDDEN');
+      }
+      if (campaign.isSuspended === true) {
+        throw new AppError('This campaign is currently suspended', 'CAMPAIGN_SUSPENDED');
+      }
+
+      const candidates = await Submission.find({
+        _id: { $in: submissionIds },
+        campaignId,
+      }).session(session);
+      if (candidates.length !== submissionIds.length) {
+        throw new AppError('One or more submissions were not found in this campaign', 'NOT_FOUND');
+      }
+      if (candidates.some((item) => getDisplayStatus(item) !== DISPLAY_STATUS.AWAITING_ADVERTISER)) {
+        throw new AppError('Every submission must be awaiting advertiser review', 'SUBMISSION_ALREADY_REVIEWED');
+      }
+
+      const isApprove = decision === 'APPROVE';
+      for (const candidate of candidates) {
+        const result = await Submission.findOneAndUpdate(
+          {
+            _id: candidate._id,
+            campaignId,
+            status: SUBMISSION_STATUS.UNDER_REVIEW,
+            'advertiserReview.status': ADVERTISER_STATUS.PENDING,
+          },
+          {
+            $set: {
+              status: isApprove ? SUBMISSION_STATUS.APPROVED : SUBMISSION_STATUS.REJECTED,
+              rejectedBy: isApprove ? null : REJECTED_BY.ADVERTISER,
+              reviewedAt: now,
+              approvedAt: isApprove ? now : null,
+              linkLocked: isApprove,
+              'advertiserReview.status': isApprove ? ADVERTISER_STATUS.APPROVED : ADVERTISER_STATUS.REJECTED,
+              'advertiserReview.reviewedAt': now,
+              'advertiserReview.reviewedBy': advertiserId,
+              'advertiserReview.note': isApprove ? '' : String(note).trim(),
+            },
+            ...(isApprove ? {} : {
+              $push: { rejectionReasons: { code: 'ADVERTISER_REJECTION', message: String(note).trim() } },
+            }),
+          },
+          { new: true, session }
+        );
+        if (!result) throw new AppError('A submission was reviewed concurrently', 'SUBMISSION_ALREADY_REVIEWED');
+        reviewed.push(result);
+      }
+
+      if (decision === 'APPROVE') {
+        await Campaign.updateOne(
+          { _id: campaignId },
+          { $inc: { 'stats.totalApprovedVideos': reviewed.length } },
+          { session }
+        );
+      }
+    });
+  } finally {
+    await session.endSession();
+  }
+
+  await Promise.all(reviewed.map((item) => decision === 'APPROVE'
+    ? notifyCreatorApproved(toNotificationPayload(item), toNotificationCampaign(campaign), { auto: false })
+    : notifyCreatorRejected(toNotificationPayload(item), toNotificationCampaign(campaign), { note: String(note).trim() })
+  ));
+
+  return {
+    campaignId: campaign._id,
+    decision,
+    reviewedCount: reviewed.length,
+    approvedCount: decision === 'APPROVE' ? reviewed.length : 0,
+    rejectedCount: decision === 'REJECT' ? reviewed.length : 0,
+    submissionIds: reviewed.map((item) => item._id),
+    reviewedAt: now,
+  };
+};
+
+const bulkApproveSubmissions = async (campaignId, advertiserId, submissionIds) => {
+  const result = await bulkReviewSubmissions(campaignId, advertiserId, {
+    submissionIds,
+    decision: 'APPROVE',
+  });
+  return {
+    campaignId: result.campaignId,
+    approvedCount: result.approvedCount,
+    submissionIds: result.submissionIds,
+    reviewedAt: result.reviewedAt,
   };
 };
 
@@ -519,44 +618,59 @@ const autoApproveDueSubmissions = async () => {
   let approved = 0;
 
   for (const s of dueSubmissions) {
-    const updated = await Submission.findOneAndUpdate(
-      {
-        _id: s._id,
-        status: SUBMISSION_STATUS.UNDER_REVIEW,
-        'advertiserReview.status': ADVERTISER_STATUS.PENDING,
-        reviewDeadlineAt: { $lte: now },
-        // نفس شرط الاستعلام: لا نعتمد ما ينتظر قرار الأدمن
-        $or: [
-          { 'aiReview.status': { $ne: AI_REVIEW_RESULT.MANUAL_REVIEW_REQUIRED } },
-          { 'adminReview.decision': { $ne: null } },
-        ],
-      },
-      {
-        $set: {
-          status: SUBMISSION_STATUS.APPROVED,
-          reviewedAt: now,
-          approvedAt: now,
-          'advertiserReview.status': ADVERTISER_STATUS.AUTO_APPROVED,
-          'advertiserReview.reviewedAt': now,
-        },
-      },
-      { new: true }
-    );
+    const session = await mongoose.startSession();
+    let updated;
+    let campaign;
+    try {
+      await session.withTransaction(async () => {
+        updated = undefined;
+        campaign = null;
+        campaign = await Campaign.findById(s.campaignId?._id || s.campaignId).session(session);
+        if (!campaign || campaign.isSuspended === true) return;
+
+        updated = await Submission.findOneAndUpdate(
+          {
+            _id: s._id,
+            status: SUBMISSION_STATUS.UNDER_REVIEW,
+            'advertiserReview.status': ADVERTISER_STATUS.PENDING,
+            reviewDeadlineAt: { $lte: now },
+            // نفس شرط الاستعلام: لا نعتمد ما ينتظر قرار الأدمن
+            $or: [
+              { 'aiReview.status': { $ne: AI_REVIEW_RESULT.MANUAL_REVIEW_REQUIRED } },
+              { 'adminReview.decision': { $ne: null } },
+            ],
+          },
+          {
+            $set: {
+              status: SUBMISSION_STATUS.APPROVED,
+              reviewedAt: now,
+              approvedAt: now,
+              'advertiserReview.status': ADVERTISER_STATUS.AUTO_APPROVED,
+              'advertiserReview.reviewedAt': now,
+            },
+          },
+          { new: true, session }
+        );
+
+        if (updated) {
+          await Campaign.updateOne(
+            { _id: campaign._id },
+            { $inc: { 'stats.totalApprovedVideos': 1 } },
+            { session }
+          );
+        }
+      });
+    } finally {
+      await session.endSession();
+    }
 
     if (updated) {
       approved += 1;
 
-      if (s.campaignId) {
-        await Campaign.updateOne(
-          { _id: s.campaignId._id },
-          { $inc: { 'stats.totalApprovedVideos': 1 } }
-        );
-      }
-
       try {
         await notifyCreatorApproved(
           { _id: s._id, creatorId: s.creatorId },
-          s.campaignId,
+          campaign,
           { auto: true }
         );
       } catch (err) {
@@ -571,6 +685,8 @@ const autoApproveDueSubmissions = async () => {
 module.exports = {
   getCampaignSubmissions,
   reviewSubmission,
+  bulkApproveSubmissions,
+  bulkReviewSubmissions,
   getManualReviewQueue,
   decideManualReview,
   autoApproveDueSubmissions,
